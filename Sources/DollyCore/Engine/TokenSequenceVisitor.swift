@@ -1,29 +1,11 @@
 //  TokenSequenceVisitor.swift
-//  dolly — lifted from SwiftStaticAnalysis (MIT)
+//  dolly — lifted from SwiftStaticAnalysis (MIT), reshaped for the
+//  interned pipeline (D2): extraction emits 16-byte `TokenRecord`s over a
+//  per-file intern table instead of per-token strings. Normalization
+//  happens at intern time with `TokenNormalizer.default` semantics.
 
 import Foundation
 import SwiftSyntax
-
-// MARK: - TokenInfo
-
-/// Represents a token with its location information.
-struct TokenInfo: Sendable, Hashable {
-  // MARK: Lifecycle
-
-  // MARK: Public
-
-  /// The token kind.
-  let kind: TokenKind
-
-  /// The token text.
-  let text: String
-
-  /// Line number (1-based).
-  let line: Int
-
-  /// Column number (1-based).
-  let column: Int
-}
 
 // MARK: - TokenKind
 
@@ -37,72 +19,30 @@ enum TokenKind: String, Sendable, Hashable {
   case unknown
 }
 
-// MARK: - TokenSequenceProtocol
-
-/// Protocol for token sequences used in stream building.
-protocol TokenSequenceProtocol: Sendable {
-  /// The source file path.
-  var file: String { get }
-  /// Number of tokens in the sequence.
-  var tokenCount: Int { get }
-  /// Token indices that start a new top-level declaration (ascending).
-  var boundaries: [Int] { get }
-}
-
-// MARK: - TokenSequenceOf
-
-/// A sequence of tokens from a source file, generic over the token payload
-/// so the raw (`TokenInfo`) and normalized (`NormalizedToken`) forms share
-/// one implementation.
-struct TokenSequenceOf<Token: Sendable & Hashable>: Sendable, TokenSequenceProtocol {
-  /// The source file path.
-  let file: String
-
-  /// The tokens in order.
-  let tokens: [Token]
-
-  /// Source lines for snippet extraction.
-  let sourceLines: [String]
-
-  /// Indices of tokens that begin a new top-level declaration or statement
-  /// (ascending). The suffix-array stream builder emits a unique separator
-  /// at each boundary so same-file declaration pairs are isomorphic to
-  /// cross-file pairs; without them, runs of 3+ normalized-identical
-  /// declarations form one periodic run whose overlapping shifted matches
-  /// outrank and then annihilate the true clone group.
-  let boundaries: [Int]
-
-  init(file: String, tokens: [Token], sourceLines: [String], boundaries: [Int] = []) {
-    self.file = file
-    self.tokens = tokens
-    self.sourceLines = sourceLines
-    self.boundaries = boundaries
-  }
-
-  /// Number of tokens in the sequence.
-  var tokenCount: Int { tokens.count }
-
-  /// Extract a code snippet for the given line range.
-  func snippet(startLine: Int, endLine: Int) -> String {
-    let start = max(0, startLine - 1)
-    let end = min(sourceLines.count, endLine)
-    guard start < end else { return "" }
-    return sourceLines[start..<end].joined(separator: "\n")
-  }
-}
-
-/// A sequence of raw source tokens.
-typealias TokenSequence = TokenSequenceOf<TokenInfo>
-
 // MARK: - TokenSequenceExtractor
 
-/// Extracts tokens from Swift source files.
+/// Extracts interned token records from Swift source files.
 struct TokenSequenceExtractor: Sendable {
-  /// Extract token sequence from a parsed syntax tree.
-  func extract(from tree: SourceFileSyntax, file: String, source: String) -> TokenSequence {
-    let sourceLines = source.components(separatedBy: .newlines)
+  private let normalizer = TokenNormalizer.default
+
+  /// Extract the interned token records from a parsed syntax tree.
+  ///
+  /// Ids in the result are FILE-LOCAL; `CorpusAssembler.assemble` remaps
+  /// them into the corpus interner. Keeping the intern pass per-file keeps
+  /// extraction parallel-safe.
+  func extract(from tree: SourceFileSyntax, file: String, source: String) -> FileTokens {
+    let text = SourceText(source: source)
     let converter = SourceLocationConverter(fileName: file, tree: tree)
-    var tokens: [TokenInfo] = []
+
+    var table: [String: UInt32] = [:]
+    var strings: [String] = []
+    func intern(_ string: String) -> UInt32 {
+      if let existing = table[string] { return existing }
+      let id = UInt32(strings.count)
+      table[string] = id
+      strings.append(string)
+      return id
+    }
 
     // Start positions of every top-level item. Each becomes a stream
     // boundary so the suffix-array stage treats same-file declarations
@@ -113,26 +53,45 @@ struct TokenSequenceExtractor: Sendable {
     var boundaries: [Int] = []
     boundaries.reserveCapacity(boundaryPositions.count)
 
+    var records: [TokenRecord] = []
+    var kinds: [TokenKind] = []
+
     for token in tree.tokens(viewMode: .sourceAccurate) {
-      // Skip trivia (whitespace, comments)
+      // Trivia (whitespace, comments) never reaches the stream.
       let kind = classifyToken(token)
       let position = token.positionAfterSkippingLeadingTrivia
       if boundaryPositions.contains(position) {
-        boundaries.append(tokens.count)
+        boundaries.append(records.count)
       }
       let location = converter.location(for: position)
 
-      tokens.append(
-        TokenInfo(
-          kind: kind,
-          text: token.text,
-          line: location.line,
-          column: location.column,
+      let rawID = intern(token.text)
+      let normID: UInt32
+      if let normalized = normalizer.normalizedText(kind: kind, text: token.text) {
+        normID = intern(normalized)
+      } else {
+        normID = rawID
+      }
+
+      records.append(
+        TokenRecord(
+          rawID: rawID,
+          normID: normID,
+          line: Int32(clamping: location.line),
+          column: Int32(clamping: location.column)
         ))
+      kinds.append(kind)
     }
 
-    return TokenSequence(
-      file: file, tokens: tokens, sourceLines: sourceLines, boundaries: boundaries)
+    return FileTokens(
+      file: file,
+      records: records,
+      strings: strings,
+      kinds: kinds,
+      boundaries: boundaries,
+      hasSourceLocationDirective: text.containsSourceLocationDirective,
+      text: text
+    )
   }
 
   // MARK: Private

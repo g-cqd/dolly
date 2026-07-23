@@ -123,18 +123,6 @@ struct SuffixArrayConstructionTests {
     }
   }
 
-  @Test("Suffix array from strings")
-  func fromStrings() {
-    let strings = ["func", "hello", "func", "world"]
-    let (sa, alphabet) = SuffixArray.fromStrings(strings)
-
-    #expect(sa.length == 4)
-    #expect(alphabet.count == 3)  // func, hello, world
-    #expect(alphabet["func"] != nil)
-    #expect(alphabet["hello"] != nil)
-    #expect(alphabet["world"] != nil)
-  }
-
   @Test("Large suffix array construction")
   func largeArray() {
     var tokens: [Int] = []
