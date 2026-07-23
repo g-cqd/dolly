@@ -52,7 +52,10 @@ enum CloneReporting {
         column: anchor.startColumn,
         message:
           "\(members.count) duplicated regions of ~\(tokens) tokens (similarity \(similarity))",
-        note: "duplicates: \(others)"
+        note: "duplicates: \(others)",
+        related: members.dropFirst().map {
+          RelatedLocation(path: $0.file, line: $0.startLine, column: $0.startColumn)
+        }
       )
     }
   }
