@@ -9,20 +9,20 @@
 /// - `maximum`: Streaming expansion on the LSH candidate pass, trading
 ///   strict buffering for memory headroom on very large corpora.
 enum ParallelMode: String, Codable, Sendable, CaseIterable {
-    /// Sequential execution. No parallelism. Deterministic.
-    case none
+  /// Sequential execution. No parallelism. Deterministic.
+  case none
 
-    /// TaskGroup-based parallelism. Recommended default.
-    case safe
+  /// TaskGroup-based parallelism. Recommended default.
+  case safe
 
-    /// Streaming candidate expansion for memory-bounded large runs.
-    case maximum
+  /// Streaming candidate expansion for memory-bounded large runs.
+  case maximum
 
-    /// Whether any parallelism is engaged.
-    var isParallel: Bool {
-        switch self {
-        case .none: false
-        case .safe, .maximum: true
-        }
+  /// Whether any parallelism is engaged.
+  var isParallel: Bool {
+    switch self {
+    case .none: false
+    case .safe, .maximum: true
     }
+  }
 }
