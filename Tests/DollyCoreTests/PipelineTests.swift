@@ -3,8 +3,8 @@ import Foundation
 import Testing
 
 @Suite struct PipelineTests {
-    @Test func cleanSourceProducesNoFindings() {
-        let report = Analyzer().analyze(source: "let x = 1\n", path: "t.swift")
+    @Test func cleanSourceProducesNoFindings() async {
+        let report = await Analyzer().analyze(source: "let x = 1\n", path: "t.swift")
         #expect(report.findings.isEmpty)
         #expect(report.analyzedFileCount == 1)
     }
