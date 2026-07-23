@@ -248,25 +248,39 @@ extension LCPArray {
     }
 
     /// Merge groups that represent the same underlying repeat.
+    ///
+    /// A repeat of length L produces shifted sub-repeats at every offset
+    /// (positions p+1, p+2, … with lengths L-1, L-2, …), each forming its
+    /// own LCP region. Comparing exact position sets misses them entirely
+    /// (the shifted positions differ), so redundancy is judged by token-
+    /// range overlap: a group is dropped when every occurrence lies at
+    /// least half inside some longer, already-kept occurrence.
     private func mergeOverlappingGroups(_ groups: [RepeatGroup]) -> [RepeatGroup] {
         guard !groups.isEmpty else { return [] }
 
-        // Sort by length descending to prefer longer repeats
-        let sorted = groups.sorted { $0.length > $1.length }
+        // Sort by length descending to prefer longer repeats; tie-break on
+        // first position for deterministic output.
+        let sorted = groups.sorted { lhs, rhs in
+            if lhs.length != rhs.length { return lhs.length > rhs.length }
+            return (lhs.positions.first ?? 0) < (rhs.positions.first ?? 0)
+        }
 
         var result: [RepeatGroup] = []
-        var usedPositions: Set<Int> = []
+        var claimed: [Range<Int>] = []  // Token-stream ranges of kept occurrences.
 
         for group in sorted {
-            // Check if this group's positions overlap significantly with used positions
-            let groupPositions = Set(group.positions)
-            let overlapCount = groupPositions.intersection(usedPositions).count
-
-            // If less than half overlap, it's a distinct group
-            if overlapCount < groupPositions.count / 2 {
-                result.append(group)
-                usedPositions.formUnion(groupPositions)
+            let ranges = group.positions.map { $0..<($0 + group.length) }
+            let redundant = ranges.allSatisfy { range in
+                claimed.contains { existing in
+                    let overlap =
+                        min(range.upperBound, existing.upperBound)
+                        - max(range.lowerBound, existing.lowerBound)
+                    return overlap * 2 >= range.count
+                }
             }
+            if redundant { continue }
+            result.append(group)
+            claimed.append(contentsOf: ranges)
         }
 
         return result
