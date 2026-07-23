@@ -230,6 +230,24 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
+  // Warm run: the facts cache is primed by the warmup iteration (excluded
+  // from samples), so measured iterations skip parse + extraction.
+  let warmCache = FileManager.default.temporaryDirectory
+    .appending(path: "dolly-bench-cache", directoryHint: .isDirectory)
+    .appending(path: "facts.json")
+  try? FileManager.default.removeItem(at: warmCache)
+
+  Benchmark(
+    "end-to-end analyze warm cache",
+    configuration: .init(
+      metrics: [.wallClock, .mallocCountTotal], warmupIterations: 1,
+      maxDuration: .seconds(60), maxIterations: 5)
+  ) { benchmark in
+    for _ in benchmark.scaledIterations {
+      blackHole(await Analyzer(cacheURL: warmCache).analyze(files: paths))
+    }
+  }
+
   Benchmark(
     "extraction stage",
     configuration: .init(

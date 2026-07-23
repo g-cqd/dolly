@@ -38,12 +38,25 @@ struct Analyze: AsyncParsableCommand {
   @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
   var writeBaseline: String?
 
+  @Flag(name: .long, help: "Disable the facts cache for this run.")
+  var noCache = false
+
+  @Option(
+    name: .long,
+    help: "Facts cache file (default: the user caches directory, dolly/facts.json).")
+  var cachePath: String?
+
   func run() async throws {
     let configuration = try loadConfiguration()
     let files = try discoverSwiftFiles(configuration: configuration)
     guard !files.isEmpty else { throw ValidationError(DollyError.noInputs.description) }
 
-    var report = await Analyzer(configuration: configuration).analyze(files: files)
+    let cacheURL: URL? =
+      noCache
+      ? nil
+      : cachePath.map { URL(fileURLWithPath: $0) } ?? Analyzer.defaultCacheURL()
+    var report = await Analyzer(configuration: configuration, cacheURL: cacheURL)
+      .analyze(files: files)
 
     if let writeBaseline {
       try Baseline(findings: report.findings).write(path: writeBaseline)

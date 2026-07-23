@@ -9,14 +9,16 @@ import SwiftSyntax
 
 // MARK: - TokenKind
 
-/// Simplified token kinds for clone detection.
-enum TokenKind: String, Sendable, Hashable {
-  case keyword
-  case identifier
-  case literal
-  case `operator`
-  case punctuation
-  case unknown
+/// Simplified token kinds for clone detection. UInt8-backed so the facts
+/// cache serializes kind lanes as byte arrays; raw values are part of the
+/// cache format (the cache is version-gated, but keep them stable anyway).
+enum TokenKind: UInt8, Sendable, Hashable {
+  case keyword = 0
+  case identifier = 1
+  case literal = 2
+  case `operator` = 3
+  case punctuation = 4
+  case unknown = 5
 }
 
 // MARK: - TokenSequenceExtractor
