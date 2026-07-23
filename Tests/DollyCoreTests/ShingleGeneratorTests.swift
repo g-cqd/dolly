@@ -157,11 +157,13 @@ struct ShingleGeneratorTests {
     )
     let generator = ShingleGenerator(shingleSize: 3, normalize: true)
 
-    let documents = generator.generateBlockDocuments(from: sequence, blockSize: 20, startId: 5)
+    let documents = generator.generateBlockDocuments(
+      from: sequence, sequenceIndex: 0, blockSize: 20, startId: 5)
 
     // Stride is blockSize/2 = 10: windows at 0, 10, 20 -> 3 documents.
     #expect(documents.count == 3)
     #expect(documents.map(\.id) == [5, 6, 7])
+    #expect(documents.map(\.tokenRange) == [0..<20, 10..<30, 20..<40])
     #expect(documents[0].startLine == 1)
     #expect(documents[0].startColumn == 3)
     #expect(documents[0].endLine == 20)
