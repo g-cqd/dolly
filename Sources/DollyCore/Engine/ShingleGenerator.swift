@@ -24,6 +24,8 @@ struct ShingledDocument: Sendable {
 
   init(
     file: String,
+    sequenceIndex: Int = 0,
+    tokenRange: Range<Int> = 0..<0,
     startLine: Int,
     startColumn: Int = 1,
     endLine: Int,
@@ -33,6 +35,8 @@ struct ShingledDocument: Sendable {
     id: Int
   ) {
     self.file = file
+    self.sequenceIndex = sequenceIndex
+    self.tokenRange = tokenRange
     self.startLine = startLine
     self.startColumn = startColumn
     self.endLine = endLine
@@ -46,6 +50,13 @@ struct ShingledDocument: Sendable {
 
   /// Source file path.
   let file: String
+
+  /// Index of the owning sequence in the corpus (for order-sensitive
+  /// verification over the block's records).
+  let sequenceIndex: Int
+
+  /// The block's token range within the owning sequence's records.
+  let tokenRange: Range<Int>
 
   /// Starting line in the file.
   let startLine: Int
@@ -161,11 +172,13 @@ struct ShingleGenerator: Sendable {
   ///
   /// - Parameters:
   ///   - sequence: The full file token sequence.
+  ///   - sequenceIndex: The sequence's index in the corpus.
   ///   - blockSize: Minimum tokens per block.
   ///   - startId: Starting ID for documents.
   /// - Returns: Array of shingled documents.
   func generateBlockDocuments(
     from sequence: TokenSequence,
+    sequenceIndex: Int,
     blockSize: Int,
     startId: Int,
   ) -> [ShingledDocument] {
@@ -188,6 +201,8 @@ struct ShingleGenerator: Sendable {
       documents.append(
         ShingledDocument(
           file: sequence.file,
+          sequenceIndex: sequenceIndex,
+          tokenRange: i..<(i + blockSize),
           startLine: Int(records[i].line),
           startColumn: Int(records[i].column),
           endLine: Int(records[i + blockSize - 1].line),

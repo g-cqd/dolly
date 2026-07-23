@@ -43,12 +43,11 @@ import SwiftSyntax
   public static func structuralGroupCount(
     _ corpus: BenchmarkTokenCorpus, minimumTokens: Int, minimumSimilarity: Double
   ) async -> Int {
-    let detector = MinHashCloneDetector(
+    let detector = StructuralCloneDetector(
       minimumTokens: minimumTokens,
       shingleSize: 5,
-      numHashes: 256,
       minimumSimilarity: minimumSimilarity
     )
-    return await detector.detectParallel(in: corpus.corpus.sequences).count
+    return await detector.detect(in: corpus.corpus.sequences).count
   }
 }
