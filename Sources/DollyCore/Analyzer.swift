@@ -62,10 +62,10 @@ public struct Analyzer: Sendable {
 
   // MARK: - Pipeline stages
 
-  /// Everything the corpus pass needs per file: the token sequence for the
-  /// engine and the suppression table for finding attribution.
+  /// Everything the corpus pass needs per file: the interned tokens for
+  /// the engine and the suppression table for finding attribution.
   private struct PreparedFile: Sendable {
-    let sequence: TokenSequence
+    let tokens: FileTokens
     let table: SuppressionTable
   }
 
@@ -74,13 +74,15 @@ public struct Analyzer: Sendable {
     case degraded(AnalysisReport.DegradedFile)
   }
 
-  /// Parse once; derive directives and the token sequence from that tree.
+  /// Parse once; derive directives and the interned tokens from that tree.
+  /// Interning stays per-file here so preparation remains parallel-safe;
+  /// `runEngine` merges the tables corpus-side.
   private static func prepare(source: String, path: String) -> PreparedFile {
     let tree = Parser.parse(source: source)
     let converter = SourceLocationConverter(fileName: path, tree: tree)
     let directives = DirectiveScanner.scan(tree: tree, converter: converter)
-    let sequence = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
-    return PreparedFile(sequence: sequence, table: SuppressionTable(directives: directives))
+    let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
+    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
   }
 
   /// Run the duplication engine across the corpus and partition results
@@ -97,8 +99,9 @@ public struct Analyzer: Sendable {
         minimumSimilarity: configuration.duplication?.minimumSimilarity ?? 0.8
       )
     )
-    let groups = await detector.detectClones(in: prepared.map(\.sequence))
-    let tables = prepared.keyed(by: \.sequence.file).mapValues(\.table)
+    let corpus = CorpusAssembler.assemble(files: prepared.map(\.tokens))
+    let groups = await detector.detectClones(in: corpus)
+    let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
 
     for finding in CloneReporting.findings(from: groups, configuration: configuration) {
       // A finding is suppressed when the anchor file's directives

@@ -1,27 +1,10 @@
 //  ExactCloneDetector.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
+//
+//  D2: a thin policy over `RollingWindows.detect` — raw id lane, always
+//  similarity 1.0. Windows are views into the file's record storage.
 
-// MARK: - TokenWindow
-
-/// A window of tokens with its hash and location.
-struct TokenWindow: Sendable, GroupableWindow {
-  let file: String
-  let hash: UInt64
-  let startIndex: Int
-  let endIndex: Int
-  let startLine: Int
-  let startColumn: Int
-  let endLine: Int
-  let tokens: [String]
-
-  func matches(_ other: Self) -> Bool {
-    tokens == other.tokens
-  }
-}
-
-// MARK: - ExactCloneDetector
-
-/// Detects exact code clones using rolling hash.
+/// Detects exact code clones using rolling hash over the raw id lane.
 struct ExactCloneDetector: Sendable {
   /// Minimum number of tokens to consider.
   let minimumTokens: Int
@@ -30,32 +13,9 @@ struct ExactCloneDetector: Sendable {
     self.minimumTokens = minimumTokens
   }
 
-  /// Detect exact clones across multiple token sequences.
-  func detect(in sequences: [TokenSequence]) -> [CloneGroup] {
-    guard minimumTokens > 0 else { return [] }
-
-    var windows: [TokenWindow] = []
-    for sequence in sequences {
-      let tokens = sequence.tokens
-      guard tokens.count >= minimumTokens else { continue }
-      let texts = tokens.map(\.text)
-      windows += RollingWindows.scan(texts: texts, windowSize: minimumTokens) { start, hash in
-        TokenWindow(
-          file: sequence.file,
-          hash: hash,
-          startIndex: start,
-          endIndex: start + minimumTokens - 1,
-          startLine: tokens[start].line,
-          startColumn: tokens[start].column,
-          endLine: tokens[start + minimumTokens - 1].line,
-          tokens: Array(texts[start..<(start + minimumTokens)])
-        )
-      }
-    }
-
-    return RollingWindows.detectGroups(
-      windows: windows, overlapThreshold: minimumTokens / 2
-    ) { group, hash in
+  /// Detect exact clones across the corpus.
+  func detect(in corpus: TokenCorpus) -> [CloneGroup] {
+    RollingWindows.detect(in: corpus, windowSize: minimumTokens, lane: .raw) { group, hash in
       CloneGroup(
         type: .exact,
         clones: group.map { $0.clone(tokenCount: minimumTokens) },

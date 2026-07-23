@@ -117,12 +117,13 @@ struct MinHashGenerator: Sendable {
         values: Array(repeating: UInt64.max, count: numHashes), documentId: documentId)
     }
 
-    // Use SIMD-optimized path for larger signatures
+    // Use SIMD-optimized path for larger signatures. The set is iterated
+    // directly — no intermediate Array copy.
     let signature: [UInt64] =
       if numHashes >= 4 {
-        computeSignatureSIMD(for: Array(shingleHashes))
+        computeSignatureSIMD(for: shingleHashes)
       } else {
-        computeSignatureScalar(for: Array(shingleHashes))
+        computeSignatureScalar(for: shingleHashes)
       }
 
     return MinHashSignature(values: signature, documentId: documentId)
@@ -143,7 +144,7 @@ struct MinHashGenerator: Sendable {
   /// Scalar implementation of MinHash computation. Identical bit-for-bit
   /// to the SIMD path; kept for `numHashes < 4` and as a reference for
   /// the equivalence test.
-  private func computeSignatureScalar(for hashes: [UInt64]) -> [UInt64] {
+  private func computeSignatureScalar(for hashes: some Sequence<UInt64>) -> [UInt64] {
     var signature = [UInt64](repeating: UInt64.max, count: numHashes)
 
     for shingleHash in hashes {
@@ -165,7 +166,7 @@ struct MinHashGenerator: Sendable {
   /// divide, fully SIMD-vectorisable across the lane. Uses plain array
   /// indexing (bounds-checked) rather than unsafe buffer pointers so the
   /// implementation stays within strict memory safety.
-  private func computeSignatureSIMD(for hashes: [UInt64]) -> [UInt64] {
+  private func computeSignatureSIMD(for hashes: some Sequence<UInt64>) -> [UInt64] {
     var signature = [UInt64](repeating: UInt64.max, count: numHashes)
 
     let chunks = numHashes / 4
