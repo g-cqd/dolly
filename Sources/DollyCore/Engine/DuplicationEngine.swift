@@ -10,50 +10,44 @@ struct DuplicationEngine: Sendable {
   /// Configuration for detection.
   let configuration: DuplicationConfiguration
 
-  /// Detect clones in the provided token sequences.
+  /// Detect clones in the provided corpus.
   /// Supports `.exact` and `.near` clone types.
-  func detectClones(in sequences: [TokenSequence], types: Set<CloneType>) -> [CloneGroup] {
+  func detectClones(in corpus: TokenCorpus, types: Set<CloneType>) -> [CloneGroup] {
     var cloneGroups: [CloneGroup] = []
-
     if types.contains(.exact) {
-      switch configuration.algorithm {
-      case .minHashLSH,
-        .rollingHash:
-        // Rolling hash detection (minHashLSH uses this for Type-1 clones)
-        let detector = ExactCloneDetector(minimumTokens: configuration.minimumTokens)
-        cloneGroups.append(contentsOf: detector.detect(in: sequences))
-
-      case .suffixArray:
-        // High-performance suffix array detection
-        let detector = SuffixArrayCloneDetector(
-          minimumTokens: configuration.minimumTokens,
-          normalizeForType2: false
-        )
-        cloneGroups.append(contentsOf: detector.detect(in: sequences))
-      }
+      cloneGroups += exactGroups(in: corpus)
     }
-
     if types.contains(.near) {
-      switch configuration.algorithm {
-      case .minHashLSH,
-        .rollingHash:
-        // Near clone detection (minHashLSH uses this for Type-2 clones)
-        let detector = NearCloneDetector(
-          minimumTokens: configuration.minimumTokens,
-          minimumSimilarity: configuration.minimumSimilarity
-        )
-        cloneGroups.append(contentsOf: detector.detect(in: sequences))
-
-      case .suffixArray:
-        // Suffix array with normalized tokens for Type-2 detection
-        let detector = SuffixArrayCloneDetector(
-          minimumTokens: configuration.minimumTokens,
-          normalizeForType2: true
-        )
-        cloneGroups.append(contentsOf: detector.detectWithNormalization(in: sequences))
-      }
+      cloneGroups += nearGroups(in: corpus)
     }
-
     return cloneGroups
+  }
+
+  /// Type-1 dispatch: rolling hash for the hash-based algorithms
+  /// (minHashLSH uses it for Type-1), suffix array otherwise.
+  private func exactGroups(in corpus: TokenCorpus) -> [CloneGroup] {
+    switch configuration.algorithm {
+    case .minHashLSH, .rollingHash:
+      ExactCloneDetector(minimumTokens: configuration.minimumTokens)
+        .detect(in: corpus)
+    case .suffixArray:
+      SuffixArrayCloneDetector(minimumTokens: configuration.minimumTokens)
+        .detect(in: corpus)
+    }
+  }
+
+  /// Type-2 dispatch: normalized rolling hash with a similarity gate, or
+  /// the suffix array over the normalized id lane.
+  private func nearGroups(in corpus: TokenCorpus) -> [CloneGroup] {
+    switch configuration.algorithm {
+    case .minHashLSH, .rollingHash:
+      NearCloneDetector(
+        minimumTokens: configuration.minimumTokens,
+        minimumSimilarity: configuration.minimumSimilarity
+      ).detect(in: corpus)
+    case .suffixArray:
+      SuffixArrayCloneDetector(minimumTokens: configuration.minimumTokens)
+        .detectWithNormalization(in: corpus)
+    }
   }
 }
