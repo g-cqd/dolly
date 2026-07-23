@@ -111,6 +111,7 @@ struct TokenNormalizer: Sendable {
       file: sequence.file,
       tokens: normalizedTokens,
       sourceLines: sequence.sourceLines,
+      boundaries: sequence.boundaries
     )
   }
 
