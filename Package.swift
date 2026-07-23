@@ -17,7 +17,7 @@ let strictSwiftSettings: [SwiftSetting] = [
 
 let package = Package(
     name: "dolly",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "DollyCore", targets: ["DollyCore"]),
         .executable(name: "dolly", targets: ["dolly"]),
