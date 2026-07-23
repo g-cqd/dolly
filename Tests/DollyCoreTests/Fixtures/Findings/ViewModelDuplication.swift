@@ -1,5 +1,11 @@
 // swift-format-ignore-file
 // Ported from SwiftStaticAnalysis Tests/Fixtures/DuplicationScenarios/NearClones (MIT).
+//
+// The four ViewModel classes are one 4-way whole-class near-clone group,
+// anchored at the first class. Before top-level boundary separators the
+// group surfaced only as shifted periodic artifacts (anchored at the API
+// closing brace and mid-function); the anchors below are the calibrated
+// post-fix output.
 
 import Foundation
 
@@ -23,12 +29,12 @@ struct API {
     func fetchCategories() async throws -> [String] {
         ["Category1", "Category2"]
     }
-}  // #dl:expect near-clone
+}
 
 // MARK: - UserViewModel
 
 /// UserViewModel - NEAR CLONE 1
-class UserViewModel {
+class UserViewModel {  // #dl:expect near-clone
     // MARK: Internal
 
     var items: [String] { userData }
@@ -42,7 +48,7 @@ class UserViewModel {
             userData = try await API.shared.fetchUsers()
         } catch {
             userError = error
-            print("User fetch failed: \(error)")  // #dl:expect near-clone
+            print("User fetch failed: \(error)")
         }
         userIsLoading = false
     }

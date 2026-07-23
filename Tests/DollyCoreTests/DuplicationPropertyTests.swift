@@ -120,6 +120,36 @@ import Testing
     #expect(report.analyzedFileCount == 2)
   }
 
+  @Test("Same source yields the same findings whether one file or split into two")
+  func sameFileMatchesSplitFiles() async throws {
+    // Three adjacent alpha-renamed copies: the D1 regression shape. In one
+    // file the copies used to form a periodic run that the group merger and
+    // overlap filter silently discarded, while any split across files was
+    // reported — the same source must now produce the same finding count
+    // either way.
+    let copies = [Self.baseFunction] + Self.renames.map(\.1)
+    let combined = copies.joined(separator: "\n\n") + "\n"
+
+    let dir = FileManager.default.temporaryDirectory
+      .appending(path: "dolly-split-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    let whole = dir.appending(path: "whole.swift")
+    try combined.write(to: whole, atomically: true, encoding: .utf8)
+    let oneFile = await Analyzer().analyze(files: [whole.path])
+
+    let first = dir.appending(path: "first.swift")
+    let second = dir.appending(path: "second.swift")
+    try (copies[0] + "\n\n" + copies[1] + "\n").write(to: first, atomically: true, encoding: .utf8)
+    try (copies[2] + "\n\n" + copies[3] + "\n").write(to: second, atomically: true, encoding: .utf8)
+    let split = await Analyzer().analyze(files: [first.path, second.path])
+
+    #expect(oneFile.findings.count == split.findings.count)
+    #expect(oneFile.findings.map(\.rule) == split.findings.map(\.rule))
+    #expect(oneFile.findings.contains { $0.rule == .nearClone })
+  }
+
   @Test("Duplication settings plumb through from configuration")
   func duplicationSettingsRespected() async {
     // With the default 50-token floor this ~30-token pair is silent;
