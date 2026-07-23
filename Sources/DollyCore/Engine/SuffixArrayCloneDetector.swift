@@ -1,23 +1,22 @@
 //  SuffixArrayCloneDetector.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
 
-
 // MARK: - TokenAccessorResult
 
 /// Result from the token accessor closure.
 struct TokenAccessorResult: Sendable {
-    let text: String
-    let original: String
-    let line: Int
-    let column: Int
+  let text: String
+  let original: String
+  let line: Int
+  let column: Int
 }
 
 // MARK: - TokenStreamResult
 
 /// Result of building a concatenated token stream.
 struct TokenStreamResult: Sendable {
-    let tokens: [Int]
-    let infos: [TokenStreamInfo]
+  let tokens: [Int]
+  let infos: [TokenStreamInfo]
 }
 
 // MARK: - SuffixArrayCloneDetector
@@ -28,412 +27,327 @@ struct TokenStreamResult: Sendable {
 /// code sequences. Unlike hash-based approaches, it cannot produce false
 /// positives and finds ALL repeats above the minimum threshold.
 struct SuffixArrayCloneDetector: Sendable {
-    // MARK: Lifecycle
+  /// Minimum number of tokens to consider as a clone.
+  let minimumTokens: Int
 
-    init(minimumTokens: Int = 50, normalizeForType2: Bool = false) {
-        self.minimumTokens = minimumTokens
-        self.normalizeForType2 = normalizeForType2
-        normalizer = .default
+  /// Whether to normalize tokens for Type-2 detection.
+  let normalizeForType2: Bool
+
+  /// Token normalizer for Type-2 detection.
+  private let normalizer: TokenNormalizer
+
+  init(minimumTokens: Int = 50, normalizeForType2: Bool = false) {
+    self.minimumTokens = minimumTokens
+    self.normalizeForType2 = normalizeForType2
+    normalizer = .default
+  }
+
+  /// Detect exact (Type-1) clones across multiple token sequences.
+  ///
+  /// - Parameter sequences: Token sequences from parsed files.
+  /// - Returns: Array of detected clone groups.
+  func detect(in sequences: [TokenSequence]) -> [CloneGroup] {
+    run(sequences, normalized: false)
+  }
+
+  /// Detect clones with normalized tokens for Type-2 detection.
+  ///
+  /// - Parameter sequences: Token sequences from parsed files.
+  /// - Returns: Array of detected clone groups.
+  func detectWithNormalization(in sequences: [TokenSequence]) -> [CloneGroup] {
+    run(sequences, normalized: true)
+  }
+
+  // MARK: - Shared pipeline
+
+  /// The single suffix-array pipeline: build the concatenated stream
+  /// (raw or normalized), find maximal repeat groups via the LCP array,
+  /// and convert them to clone groups.
+  private func run(_ sequences: [TokenSequence], normalized: Bool) -> [CloneGroup] {
+    // Safety: ensure minimumTokens is valid
+    guard !sequences.isEmpty, minimumTokens > 0 else { return [] }
+
+    // Drop macro-expansion sources from the input. Sequences whose
+    // file contains a `#sourceLocation(...)` directive are typically
+    // the output of Swift macros expanded into synthesised files;
+    // clone groups spanning a macro's definition and its expansion
+    // are expected, not actionable.
+    let filteredSequences = sequences.filter { !Self.containsSourceLocationDirective($0) }
+    guard !filteredSequences.isEmpty else { return [] }
+
+    if normalized {
+      return detectStream(
+        sequences: filteredSequences.map { normalizer.normalize($0) },
+        cloneType: .near
+      ) { token in
+        TokenAccessorResult(
+          text: token.normalized, original: token.original,
+          line: token.line, column: token.column)
+      }
+    }
+    return detectStream(sequences: filteredSequences, cloneType: .exact) { token in
+      TokenAccessorResult(
+        text: token.text, original: token.text,
+        line: token.line, column: token.column)
+    }
+  }
+
+  /// Suffix-array detection over one concatenated stream, generic over
+  /// the token payload so the raw and normalized passes share every step.
+  private func detectStream<Token: Sendable & Hashable>(
+    sequences: [TokenSequenceOf<Token>],
+    cloneType: CloneType,
+    accessor: (Token) -> TokenAccessorResult
+  ) -> [CloneGroup] {
+    let streamResult = buildStream(from: sequences) { seq, index in
+      accessor(seq.tokens[index])
+    }
+    guard streamResult.tokens.count >= minimumTokens else { return [] }
+
+    let suffixArray = SuffixArray(tokens: streamResult.tokens)
+    let lcpArray = LCPArray(suffixArray: suffixArray, tokens: streamResult.tokens)
+    let repeatGroups = lcpArray.findRepeatGroups(minLength: minimumTokens)
+
+    return buildCloneGroups(
+      repeatGroups: repeatGroups,
+      tokenInfos: streamResult.infos,
+      cloneType: cloneType
+    ) { position, length in
+      createCloneLocation(
+        position: position, length: length,
+        tokenInfos: streamResult.infos, sequences: sequences)
+    }
+  }
+
+  /// Return `true` when the sequence's source lines contain a
+  /// `#sourceLocation(...)` directive — the marker the Swift compiler
+  /// emits at the top of macro-expansion files. Conservative: any
+  /// occurrence is treated as a macro-expansion signal.
+  static func containsSourceLocationDirective(_ sequence: TokenSequence) -> Bool {
+    for line in sequence.sourceLines {
+      // Skip leading whitespace.
+      let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+      if trimmed.hasPrefix("#sourceLocation") {
+        return true
+      }
+    }
+    return false
+  }
+
+  // MARK: - Stream Building
+
+  /// Build a concatenated token stream from multiple sequences.
+  ///
+  /// Tokens are converted to integers, and sentinel values are inserted
+  /// between files to prevent cross-file matches.
+  private func buildStream<S: Collection>(
+    from sequences: S,
+    tokenAccessor: (S.Element, Int) -> TokenAccessorResult
+  ) -> TokenStreamResult where S.Element: TokenSequenceProtocol {
+    var tokens: [Int] = []
+    var infos: [TokenStreamInfo] = []
+    var tokenIdMap: [String: Int] = [:]
+    var nextTokenId = 1  // 0 reserved for separators
+
+    for (fileIndex, sequence) in sequences.enumerated() {
+      for tokenIdx in 0..<sequence.tokenCount {
+        let accessor = tokenAccessor(sequence, tokenIdx)
+        let tokenId: Int
+        if let existingId = tokenIdMap[accessor.text] {
+          tokenId = existingId
+        } else {
+          tokenId = nextTokenId
+          tokenIdMap[accessor.text] = tokenId
+          nextTokenId += 1
+        }
+
+        tokens.append(tokenId)
+        infos.append(
+          TokenStreamInfo(
+            fileIndex: fileIndex,
+            line: accessor.line,
+            column: accessor.column,
+            originalText: accessor.original
+          ))
+      }
+
+      // Add separator between files (unique sentinel)
+      let separatorId = nextTokenId
+      nextTokenId += 1
+      tokens.append(separatorId)
+      infos.append(
+        TokenStreamInfo(
+          fileIndex: fileIndex,
+          line: -1,
+          column: -1,
+          originalText: "<SEP>"
+        ))
     }
 
-    // MARK: Public
+    return TokenStreamResult(tokens: tokens, infos: infos)
+  }
 
-    /// Minimum number of tokens to consider as a clone.
-    let minimumTokens: Int
+  // MARK: - Clone Group Conversion
 
-    /// Whether to normalize tokens for Type-2 detection.
-    let normalizeForType2: Bool
+  /// Common clone group building logic.
+  private func buildCloneGroups(
+    repeatGroups: [RepeatGroup],
+    tokenInfos: [TokenStreamInfo],
+    cloneType: CloneType,
+    locationCreator: (Int, Int) -> CloneLocation?
+  ) -> [CloneGroup] {
+    var cloneGroups: [CloneGroup] = []
 
-    /// Detect clones across multiple token sequences.
-    ///
-    /// - Parameter sequences: Token sequences from parsed files.
-    /// - Returns: Array of detected clone groups.
-    func detect(in sequences: [TokenSequence]) -> [CloneGroup] {
-        // Safety: ensure minimumTokens is valid
-        guard !sequences.isEmpty, minimumTokens > 0 else { return [] }
+    for group in repeatGroups {
+      let validPositions = group.positions.filter { pos in
+        isValidPosition(pos, length: group.length, tokenInfos: tokenInfos)
+      }
 
-        // Drop macro-expansion sources from the input. Sequences whose
-        // file contains a `#sourceLocation(...)` directive are
-        // typically the output of Swift macros expanded into
-        // synthesised files (under `.build/.../macroexpansion/...`).
-        // Even though `findSwiftFiles` already excludes `.build/`,
-        // callers may explicitly include macro-expansion roots; clone
-        // groups spanning a macro's definition and its expansion are
-        // expected, not actionable.
-        let filteredSequences = sequences.filter { !Self.containsSourceLocationDirective($0) }
-        guard !filteredSequences.isEmpty else { return [] }
+      guard validPositions.count >= 2 else { continue }
 
-        // Build concatenated token stream with file boundaries
-        let streamResult = buildConcatenatedStream(filteredSequences)
+      let cloneLocations = validPositions.compactMap { pos in
+        locationCreator(pos, group.length)
+      }
 
-        guard streamResult.tokens.count >= minimumTokens else { return [] }
+      let filteredLocations = filterOverlappingClones(cloneLocations)
 
-        // Build suffix array
-        let suffixArray = SuffixArray(tokens: streamResult.tokens)
+      guard filteredLocations.count >= 2 else { continue }
 
-        // Build LCP array
-        let lcpArray = LCPArray(suffixArray: suffixArray, tokens: streamResult.tokens)
-
-        // Find repeat groups
-        let repeatGroups = lcpArray.findRepeatGroups(minLength: minimumTokens)
-
-        // Convert to clone groups with location information
-        return convertToCloneGroups(
-            repeatGroups: repeatGroups,
-            tokenInfos: streamResult.infos,
-            sequences: filteredSequences,
+      let clones = filteredLocations.map { loc in
+        Clone(
+          file: loc.file,
+          startLine: loc.startLine,
+          startColumn: loc.startColumn,
+          endLine: loc.endLine,
+          tokenCount: group.length,
+          codeSnippet: ""
         )
+      }
+
+      let fingerprint = generateFingerprint(
+        position: validPositions[0],
+        length: min(group.length, 20),
+        tokenInfos: tokenInfos
+      )
+
+      cloneGroups.append(
+        CloneGroup(
+          type: cloneType,
+          clones: clones,
+          similarity: 1.0,
+          fingerprint: fingerprint
+        ))
     }
 
-    /// Detect clones with normalized tokens for Type-2 detection.
-    ///
-    /// - Parameter sequences: Token sequences from parsed files.
-    /// - Returns: Array of detected clone groups (both exact and parameterized).
-    func detectWithNormalization(in sequences: [TokenSequence]) -> [CloneGroup] {
-        // Safety: ensure minimumTokens is valid
-        guard !sequences.isEmpty, minimumTokens > 0 else { return [] }
+    return cloneGroups.deduplicated()
+  }
 
-        // Same macro-expansion filter as `detect(in:)` — see the
-        // comment there for the rationale.
-        let filteredSequences = sequences.filter { !Self.containsSourceLocationDirective($0) }
-        guard !filteredSequences.isEmpty else { return [] }
+  // MARK: - Helper Methods
 
-        // Normalize sequences
-        let normalizedSequences = filteredSequences.map { normalizer.normalize($0) }
+  /// Check if a position is valid (doesn't cross file boundaries).
+  private func isValidPosition(_ pos: Int, length: Int, tokenInfos: [TokenStreamInfo]) -> Bool {
+    guard pos >= 0, pos + length <= tokenInfos.count else { return false }
 
-        // Build concatenated stream from normalized tokens
-        let streamResult = buildNormalizedStream(normalizedSequences)
+    let startInfo = tokenInfos[pos]
+    let endInfo = tokenInfos[pos + length - 1]
 
-        guard streamResult.tokens.count >= minimumTokens else { return [] }
+    // Check if start and end are in the same file
+    return startInfo.fileIndex == endInfo.fileIndex && startInfo.line >= 0
+  }
 
-        // Build suffix array
-        let suffixArray = SuffixArray(tokens: streamResult.tokens)
+  /// Create a clone location from a position.
+  ///
+  /// Generic over any sequence type conforming to TokenSequenceProtocol,
+  /// eliminating duplication between regular and normalized sequence handling.
+  private func createCloneLocation<S: TokenSequenceProtocol>(
+    position: Int,
+    length: Int,
+    tokenInfos: [TokenStreamInfo],
+    sequences: [S]
+  ) -> CloneLocation? {
+    guard isValidPosition(position, length: length, tokenInfos: tokenInfos) else { return nil }
 
-        // Build LCP array
-        let lcpArray = LCPArray(suffixArray: suffixArray, tokens: streamResult.tokens)
+    let startInfo = tokenInfos[position]
+    let endInfo = tokenInfos[position + length - 1]
+    let file = sequences[startInfo.fileIndex].file
 
-        // Find repeat groups
-        let repeatGroups = lcpArray.findRepeatGroups(minLength: minimumTokens)
+    return CloneLocation(
+      file: file,
+      fileIndex: startInfo.fileIndex,
+      startLine: startInfo.line,
+      startColumn: startInfo.column,
+      endLine: endInfo.line,
+      startPosition: position,
+      endPosition: position + length - 1
+    )
+  }
 
-        // Convert to clone groups
-        return convertNormalizedToCloneGroups(
-            repeatGroups: repeatGroups,
-            tokenInfos: streamResult.infos,
-            sequences: normalizedSequences,
-        )
+  /// Filter same-file occurrences that overlap an already-kept one.
+  ///
+  /// Disjoint duplicated regions never overlap; overlapping occurrences
+  /// only arise from periodic content (uniform literal lists, runs of
+  /// near-identical statements) matching a shifted copy of itself. That
+  /// is self-similarity, not duplication a caller could extract, so any
+  /// overlap disqualifies the later occurrence.
+  private func filterOverlappingClones(_ locations: [CloneLocation]) -> [CloneLocation] {
+    guard locations.count > 1 else { return locations }
+
+    // Sort by file then start position
+    let sorted = locations.sorted { lhs, rhs in
+      if lhs.fileIndex != rhs.fileIndex {
+        return lhs.fileIndex < rhs.fileIndex
+      }
+      return lhs.startPosition < rhs.startPosition
     }
 
-    // MARK: Private
+    var result: [CloneLocation] = []
+    var lastByFile: [Int: CloneLocation] = [:]
 
-    /// Token normalizer for Type-2 detection.
-    private let normalizer: TokenNormalizer
+    for loc in sorted {
+      if let last = lastByFile[loc.fileIndex], loc.startPosition <= last.endPosition {
+        continue
+      }
 
-    /// Return `true` when the sequence's source lines contain a
-    /// `#sourceLocation(...)` directive — the marker the Swift
-    /// compiler emits at the top of macro-expansion files and that
-    /// some hand-authored code uses for error-reporting overrides.
-    /// Conservative: any occurrence is treated as a macro-expansion
-    /// signal. The line-prefix scan is cheap (~one comparison per
-    /// non-blank line, no allocation).
-    static func containsSourceLocationDirective(_ sequence: TokenSequence) -> Bool {
-        for line in sequence.sourceLines {
-            // Skip leading whitespace.
-            let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
-            if trimmed.hasPrefix("#sourceLocation") {
-                return true
-            }
-        }
-        return false
+      result.append(loc)
+      lastByFile[loc.fileIndex] = loc
     }
 
-    // MARK: - Stream Building
+    return result
+  }
 
-    /// Build a concatenated token stream from multiple sequences.
-    ///
-    /// Tokens are converted to integers, and sentinel values are inserted
-    /// between files to prevent cross-file matches.
-    private func buildConcatenatedStream(_ sequences: [TokenSequence]) -> TokenStreamResult {
-        buildStream(from: sequences) { seq, index in
-            let token = seq.tokens[index]
-            return TokenAccessorResult(text: token.text, original: token.text, line: token.line, column: token.column)
-        }
+  /// Generate a fingerprint for a clone.
+  private func generateFingerprint(
+    position: Int,
+    length: Int,
+    tokenInfos: [TokenStreamInfo]
+  ) -> String {
+    var parts: [String] = []
+    for i in position..<min(position + length, tokenInfos.count) {
+      parts.append(tokenInfos[i].originalText)
     }
-
-    /// Build concatenated stream from normalized sequences.
-    private func buildNormalizedStream(_ sequences: [NormalizedSequence]) -> TokenStreamResult {
-        buildStream(from: sequences) { seq, index in
-            let token = seq.tokens[index]
-            return TokenAccessorResult(
-                text: token.normalized,
-                original: token.original,
-                line: token.line,
-                column: token.column,
-            )
-        }
-    }
-
-    /// Generic stream building helper.
-    private func buildStream<S: Collection>(
-        from sequences: S,
-        tokenAccessor: (S.Element, Int) -> TokenAccessorResult,
-    ) -> TokenStreamResult where S.Element: TokenSequenceProtocol {
-        var tokens: [Int] = []
-        var infos: [TokenStreamInfo] = []
-        var tokenIdMap: [String: Int] = [:]
-        var nextTokenId = 1  // 0 reserved for separators
-
-        for (fileIndex, sequence) in sequences.enumerated() {
-            for tokenIdx in 0..<sequence.tokenCount {
-                let accessor = tokenAccessor(sequence, tokenIdx)
-                let tokenId: Int
-                if let existingId = tokenIdMap[accessor.text] {
-                    tokenId = existingId
-                } else {
-                    tokenId = nextTokenId
-                    tokenIdMap[accessor.text] = tokenId
-                    nextTokenId += 1
-                }
-
-                tokens.append(tokenId)
-                infos.append(
-                    TokenStreamInfo(
-                        fileIndex: fileIndex,
-                        line: accessor.line,
-                        column: accessor.column,
-                        originalText: accessor.original
-                    ))
-            }
-
-            // Add separator between files (unique sentinel)
-            let separatorId = nextTokenId
-            nextTokenId += 1
-            tokens.append(separatorId)
-            infos.append(
-                TokenStreamInfo(
-                    fileIndex: fileIndex,
-                    line: -1,
-                    column: -1,
-                    originalText: "<SEP>"
-                ))
-        }
-
-        return TokenStreamResult(tokens: tokens, infos: infos)
-    }
-
-    // MARK: - Clone Group Conversion
-
-    /// Convert repeat groups to clone groups with full location information.
-    private func convertToCloneGroups(
-        repeatGroups: [RepeatGroup],
-        tokenInfos: [TokenStreamInfo],
-        sequences: [TokenSequence],
-    ) -> [CloneGroup] {
-        buildCloneGroups(
-            repeatGroups: repeatGroups,
-            tokenInfos: tokenInfos,
-            cloneType: .exact,
-        ) { pos, length in
-            createCloneLocation(
-                position: pos,
-                length: length,
-                tokenInfos: tokenInfos,
-                sequences: sequences,
-            )
-        }
-    }
-
-    /// Convert normalized repeat groups to clone groups.
-    private func convertNormalizedToCloneGroups(
-        repeatGroups: [RepeatGroup],
-        tokenInfos: [TokenStreamInfo],
-        sequences: [NormalizedSequence],
-    ) -> [CloneGroup] {
-        buildCloneGroups(
-            repeatGroups: repeatGroups,
-            tokenInfos: tokenInfos,
-            cloneType: .near,
-        ) { pos, length in
-            createCloneLocation(
-                position: pos,
-                length: length,
-                tokenInfos: tokenInfos,
-                sequences: sequences
-            )
-        }
-    }
-
-    /// Common clone group building logic.
-    private func buildCloneGroups(
-        repeatGroups: [RepeatGroup],
-        tokenInfos: [TokenStreamInfo],
-        cloneType: CloneType,
-        locationCreator: (Int, Int) -> CloneLocation?,
-    ) -> [CloneGroup] {
-        var cloneGroups: [CloneGroup] = []
-
-        for group in repeatGroups {
-            let validPositions = group.positions.filter { pos in
-                isValidPosition(pos, length: group.length, tokenInfos: tokenInfos)
-            }
-
-            guard validPositions.count >= 2 else { continue }
-
-            let cloneLocations = validPositions.compactMap { pos in
-                locationCreator(pos, group.length)
-            }
-
-            let filteredLocations = filterOverlappingClones(cloneLocations)
-
-            guard filteredLocations.count >= 2 else { continue }
-
-            let clones = filteredLocations.map { loc in
-                Clone(
-                    file: loc.file,
-                    startLine: loc.startLine,
-                    startColumn: loc.startColumn,
-                    endLine: loc.endLine,
-                    tokenCount: group.length,
-                    codeSnippet: ""
-                )
-            }
-
-            let fingerprint = generateFingerprint(
-                position: validPositions[0],
-                length: min(group.length, 20),
-                tokenInfos: tokenInfos,
-            )
-
-            cloneGroups.append(
-                CloneGroup(
-                    type: cloneType,
-                    clones: clones,
-                    similarity: 1.0,
-                    fingerprint: fingerprint,
-                ))
-        }
-
-        return deduplicateGroups(cloneGroups)
-    }
-
-    // MARK: - Helper Methods
-
-    /// Check if a position is valid (doesn't cross file boundaries).
-    private func isValidPosition(_ pos: Int, length: Int, tokenInfos: [TokenStreamInfo]) -> Bool {
-        guard pos >= 0, pos + length <= tokenInfos.count else { return false }
-
-        let startInfo = tokenInfos[pos]
-        let endInfo = tokenInfos[pos + length - 1]
-
-        // Check if start and end are in the same file
-        return startInfo.fileIndex == endInfo.fileIndex && startInfo.line >= 0
-    }
-
-    /// Create a clone location from a position.
-    ///
-    /// Generic over any sequence type conforming to TokenSequenceProtocol,
-    /// eliminating duplication between regular and normalized sequence handling.
-    private func createCloneLocation<S: TokenSequenceProtocol>(
-        position: Int,
-        length: Int,
-        tokenInfos: [TokenStreamInfo],
-        sequences: [S]
-    ) -> CloneLocation? {
-        guard isValidPosition(position, length: length, tokenInfos: tokenInfos) else { return nil }
-
-        let startInfo = tokenInfos[position]
-        let endInfo = tokenInfos[position + length - 1]
-        let file = sequences[startInfo.fileIndex].file
-
-        return CloneLocation(
-            file: file,
-            fileIndex: startInfo.fileIndex,
-            startLine: startInfo.line,
-            startColumn: startInfo.column,
-            endLine: endInfo.line,
-            startPosition: position,
-            endPosition: position + length - 1
-        )
-    }
-
-    /// Filter overlapping clones within the same file.
-    private func filterOverlappingClones(_ locations: [CloneLocation]) -> [CloneLocation] {
-        guard locations.count > 1 else { return locations }
-
-        // Sort by file then start position
-        let sorted = locations.sorted { lhs, rhs in
-            if lhs.fileIndex != rhs.fileIndex {
-                return lhs.fileIndex < rhs.fileIndex
-            }
-            return lhs.startPosition < rhs.startPosition
-        }
-
-        var result: [CloneLocation] = []
-        var lastByFile: [Int: CloneLocation] = [:]
-
-        for loc in sorted {
-            if let last = lastByFile[loc.fileIndex] {
-                // Check for significant overlap (more than 50%)
-                let overlapStart = max(last.startPosition, loc.startPosition)
-                let overlapEnd = min(last.endPosition, loc.endPosition)
-                let overlapLength = max(0, overlapEnd - overlapStart + 1)
-                let locLength = loc.endPosition - loc.startPosition + 1
-
-                if overlapLength > locLength / 2 {
-                    // Significant overlap, skip this one
-                    continue
-                }
-            }
-
-            result.append(loc)
-            lastByFile[loc.fileIndex] = loc
-        }
-
-        return result
-    }
-
-    /// Generate a fingerprint for a clone.
-    private func generateFingerprint(
-        position: Int,
-        length: Int,
-        tokenInfos: [TokenStreamInfo],
-    ) -> String {
-        var parts: [String] = []
-        for i in position..<min(position + length, tokenInfos.count) {
-            parts.append(tokenInfos[i].originalText)
-        }
-        return String(FNV1a.hash(parts.joined(separator: " ")))
-    }
-
-    /// Deduplicate clone groups with same locations.
-    private func deduplicateGroups(_ groups: [CloneGroup]) -> [CloneGroup] {
-        groups.uniquedBy { group in
-            group.clones
-                .map { "\($0.file):\($0.startLine)-\($0.endLine)" }
-                .sorted()
-                .joined(separator: "|")
-        }
-    }
+    return String(FNV1a.hash(parts.joined(separator: " ")))
+  }
 }
 
 // MARK: - TokenStreamInfo
 
 /// Information about a token in the concatenated stream.
 struct TokenStreamInfo: Sendable {
-    let fileIndex: Int
-    let line: Int
-    let column: Int
-    let originalText: String
+  let fileIndex: Int
+  let line: Int
+  let column: Int
+  let originalText: String
 }
 
 // MARK: - CloneLocation
 
 /// Location of a clone occurrence.
 struct CloneLocation: Sendable {
-    let file: String
-    let fileIndex: Int
-    let startLine: Int
-    let startColumn: Int
-    let endLine: Int
-    let startPosition: Int
-    let endPosition: Int
+  let file: String
+  let fileIndex: Int
+  let startLine: Int
+  let startColumn: Int
+  let endLine: Int
+  let startPosition: Int
+  let endPosition: Int
 }

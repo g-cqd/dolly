@@ -9,84 +9,79 @@ import Foundation
 /// moves. That is the deliberate trade against fuzzy matching silently
 /// swallowing *new* bugs.
 public struct Baseline: Sendable, Equatable {
-    public let fingerprints: Set<String>
+  public let fingerprints: Set<String>
 
-    public init(fingerprints: Set<String>) {
-        self.fingerprints = fingerprints
+  public init(fingerprints: Set<String>) {
+    self.fingerprints = fingerprints
+  }
+
+  public init(findings: [Finding]) {
+    self.init(fingerprints: Set(findings.map(\.fingerprint)))
+  }
+
+  public func contains(_ finding: Finding) -> Bool {
+    fingerprints.contains(finding.fingerprint)
+  }
+
+  /// Splits findings into (kept, baselined).
+  public func filter(_ findings: [Finding]) -> (kept: [Finding], baselined: [Finding]) {
+    var kept: [Finding] = []
+    var baselined: [Finding] = []
+    for finding in findings {
+      if contains(finding) {
+        baselined.append(finding)
+      } else {
+        kept.append(finding)
+      }
     }
+    return (kept, baselined)
+  }
 
-    public init(findings: [Finding]) {
-        self.init(fingerprints: Set(findings.map(\.fingerprint)))
+  // MARK: - Persistence (versioned JSON, deterministic ordering)
+
+  private struct Payload: Codable {
+    var version: Int
+    var tool: String
+    var fingerprints: [String]
+  }
+
+  public static func load(path: String) throws(DollyError) -> Baseline {
+    let payload = try BoundedFileReader.readJSON(Payload.self, path: path)
+    guard payload.version == 1 else {
+      throw .configurationInvalid(
+        path: path, detail: "unsupported baseline version \(payload.version)")
     }
+    return Baseline(fingerprints: Set(payload.fingerprints))
+  }
 
-    public func contains(_ finding: Finding) -> Bool {
-        fingerprints.contains(finding.fingerprint)
+  public func write(path: String) throws(DollyError) {
+    let payload = Payload(
+      version: 1,
+      tool: ToolInfo.name,
+      fingerprints: fingerprints.sorted()
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    do {
+      let data = try encoder.encode(payload)
+      try data.write(to: URL(fileURLWithPath: path))
+    } catch {
+      throw .configurationUnreadable(path: path, underlying: String(describing: error))
     }
-
-    /// Splits findings into (kept, baselined).
-    public func filter(_ findings: [Finding]) -> (kept: [Finding], baselined: [Finding]) {
-        var kept: [Finding] = []
-        var baselined: [Finding] = []
-        for finding in findings {
-            if contains(finding) {
-                baselined.append(finding)
-            } else {
-                kept.append(finding)
-            }
-        }
-        return (kept, baselined)
-    }
-
-    // MARK: - Persistence (versioned JSON, deterministic ordering)
-
-    private struct Payload: Codable {
-        var version: Int
-        var tool: String
-        var fingerprints: [String]
-    }
-
-    public static func load(path: String) throws(DollyError) -> Baseline {
-        let data = try BoundedFileReader.read(path: path)
-        let payload: Payload
-        do {
-            payload = try JSONDecoder().decode(Payload.self, from: data)
-        } catch {
-            throw .configurationInvalid(path: path, detail: String(describing: error))
-        }
-        guard payload.version == 1 else {
-            throw .configurationInvalid(path: path, detail: "unsupported baseline version \(payload.version)")
-        }
-        return Baseline(fingerprints: Set(payload.fingerprints))
-    }
-
-    public func write(path: String) throws(DollyError) {
-        let payload = Payload(
-            version: 1,
-            tool: ToolInfo.name,
-            fingerprints: fingerprints.sorted()
-        )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            let data = try encoder.encode(payload)
-            try data.write(to: URL(fileURLWithPath: path))
-        } catch {
-            throw .configurationUnreadable(path: path, underlying: String(describing: error))
-        }
-    }
+  }
 }
 
 extension Finding {
-    /// Stable identity for baselines and SARIF `partialFingerprints`.
-    /// FNV-1a 64-bit over the finding's identifying fields — identity hashing,
-    /// not security; collisions merely over-baseline one finding.
-    public var fingerprint: String {
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        let prime: UInt64 = 0x0000_0100_0000_01b3
-        for byte in "\(rule.rawValue)|\(path)|\(line)|\(column)|\(message)".utf8 {
-            hash ^= UInt64(byte)
-            hash &*= prime
-        }
-        return String(hash, radix: 16, uppercase: false)
+  /// Stable identity for baselines and SARIF `partialFingerprints`.
+  /// FNV-1a 64-bit over the finding's identifying fields — identity hashing,
+  /// not security; collisions merely over-baseline one finding.
+  public var fingerprint: String {
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    let prime: UInt64 = 0x0000_0100_0000_01b3
+    for byte in "\(rule.rawValue)|\(path)|\(line)|\(column)|\(message)".utf8 {
+      hash ^= UInt64(byte)
+      hash &*= prime
     }
+    return String(hash, radix: 16, uppercase: false)
+  }
 }
