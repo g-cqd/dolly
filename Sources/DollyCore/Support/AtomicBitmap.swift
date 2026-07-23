@@ -12,11 +12,11 @@ import Synchronization
 /// `ManagedAtomic<UInt64>` while keeping the codebase on the stdlib
 /// `Synchronization` module.
 private final class AtomicWord: Sendable {
-    let value: Atomic<UInt64>
+  let value: Atomic<UInt64>
 
-    init(_ initial: UInt64 = 0) {
-        self.value = Atomic<UInt64>(initial)
-    }
+  init(_ initial: UInt64 = 0) {
+    self.value = Atomic<UInt64>(initial)
+  }
 }
 
 // MARK: - AtomicBitmap
@@ -34,54 +34,50 @@ private final class AtomicWord: Sendable {
 /// - `test`: O(1) atomic load
 /// - Memory: ~n/8 bytes for n bits plus per-word reference overhead
 final class AtomicBitmap: Sendable {
-    /// Number of bits in the bitmap.
-    let size: Int
+  /// Number of bits in the bitmap.
+  let size: Int
 
-    private let storage: [AtomicWord]
-    private let wordCount: Int
+  private let storage: [AtomicWord]
+  private let wordCount: Int
 
-    /// Create a bitmap with the given number of bits, all initially unset.
-    init(size: Int) {
-        precondition(size >= 0, "Bitmap size must be non-negative")
-        self.size = size
-        self.wordCount = (size + 63) / 64
-        self.storage = (0..<wordCount).map { _ in AtomicWord() }
-    }
+  /// Create a bitmap with the given number of bits, all initially unset.
+  init(size: Int) {
+    precondition(size >= 0, "Bitmap size must be non-negative")
+    self.size = size
+    self.wordCount = (size + 63) / 64
+    self.storage = (0..<wordCount).map { _ in AtomicWord() }
+  }
 
-    /// Atomically test and set a bit.
-    ///
-    /// - Parameter index: The bit index to set.
-    /// - Returns: `true` if the bit was previously unset (and is now set),
-    ///            `false` if it was already set.
-    ///
-    /// This operation is atomic and thread-safe using fetch-or.
-    @inline(__always)
-    func testAndSet(_ index: Int) -> Bool {
-        precondition(index >= 0 && index < size, "Bitmap index out of bounds")
+  /// Atomically test and set a bit.
+  ///
+  /// - Parameter index: The bit index to set.
+  /// - Returns: `true` if the bit was previously unset (and is now set),
+  ///            `false` if it was already set.
+  ///
+  /// This operation is atomic and thread-safe using fetch-or.
+  @inline(__always)
+  func testAndSet(_ index: Int) -> Bool {
+    let slot = slot(of: index)
+    // Atomic fetch-or: sets the bit and returns the OLD value
+    let (oldValue, _) = storage[slot.word].value.bitwiseOr(slot.mask, ordering: .relaxed)
+    // Return true if the bit was previously unset
+    return (oldValue & slot.mask) == 0
+  }
 
-        let wordIndex = index / 64
-        let bitIndex = index % 64
-        let mask: UInt64 = 1 << bitIndex
+  /// Check if a bit is set (atomic read).
+  ///
+  /// - Parameter index: The bit index to check.
+  /// - Returns: `true` if the bit is set, `false` otherwise.
+  @inline(__always)
+  func test(_ index: Int) -> Bool {
+    let slot = slot(of: index)
+    return (storage[slot.word].value.load(ordering: .relaxed) & slot.mask) != 0
+  }
 
-        // Atomic fetch-or: sets the bit and returns the OLD value
-        let (oldValue, _) = storage[wordIndex].value.bitwiseOr(mask, ordering: .relaxed)
-
-        // Return true if the bit was previously unset
-        return (oldValue & mask) == 0
-    }
-
-    /// Check if a bit is set (atomic read).
-    ///
-    /// - Parameter index: The bit index to check.
-    /// - Returns: `true` if the bit is set, `false` otherwise.
-    @inline(__always)
-    func test(_ index: Int) -> Bool {
-        precondition(index >= 0 && index < size, "Bitmap index out of bounds")
-
-        let wordIndex = index / 64
-        let bitIndex = index % 64
-        let mask: UInt64 = 1 << bitIndex
-
-        return (storage[wordIndex].value.load(ordering: .relaxed) & mask) != 0
-    }
+  /// Bounds-checked (word index, bit mask) pair for a bit index.
+  @inline(__always)
+  private func slot(of index: Int) -> (word: Int, mask: UInt64) {
+    precondition(index >= 0 && index < size, "Bitmap index out of bounds")
+    return (index / 64, 1 << (index % 64))
+  }
 }
