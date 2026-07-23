@@ -170,11 +170,13 @@ struct DuplicationDetector: Sendable {
 
   /// Detect clones in the given corpus.
   ///
+  /// The structural stage is independent of the serial exact+near
+  /// suffix-array work, so it runs concurrently (`async let`) and joins
+  /// before reporting; group order in the result is unchanged.
+  ///
   /// - Parameter corpus: Assembled token corpus from parsed files.
   /// - Returns: Array of clone groups found.
   func detectClones(in corpus: TokenCorpus) async -> [CloneGroup] {
-    var cloneGroups: [CloneGroup] = []
-
     // When near clones are requested under the minHashLSH algorithm,
     // route them through `MinHashCloneDetector` rather than the
     // token-window engine — and relabel its inherently structural
@@ -187,6 +189,9 @@ struct DuplicationDetector: Sendable {
       engineTypes.remove(.near)
     }
 
+    async let structuralClones = structuralGroups(in: corpus)
+
+    var cloneGroups: [CloneGroup] = []
     if !engineTypes.isEmpty {
       let engine = DuplicationEngine(configuration: configuration)
       cloneGroups.append(contentsOf: engine.detectClones(in: corpus, types: engineTypes))
@@ -197,13 +202,16 @@ struct DuplicationDetector: Sendable {
       cloneGroups.append(contentsOf: nearClones)
     }
 
-    if configuration.cloneTypes.contains(.structural) {
-      let structuralClones = await detectMinHashClones(
-        in: corpus.sequences, labelledAs: .structural)
-      cloneGroups.append(contentsOf: structuralClones)
-    }
+    cloneGroups.append(contentsOf: await structuralClones)
 
     return cloneGroups
+  }
+
+  /// The structural stage, hopped onto the concurrent executor so it
+  /// genuinely overlaps the caller's serial suffix-array work.
+  @concurrent private func structuralGroups(in corpus: TokenCorpus) async -> [CloneGroup] {
+    guard configuration.cloneTypes.contains(.structural) else { return [] }
+    return await detectMinHashClones(in: corpus.sequences, labelledAs: .structural)
   }
 
   /// Run MinHash+LSH clone detection and relabel its inherently
