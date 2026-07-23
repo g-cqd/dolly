@@ -25,7 +25,7 @@ import Testing
     }
 
     @Test("Clean fixtures: zero findings (false-positive gate)")
-    func cleanFixturesStayClean() throws {
+    func cleanFixturesStayClean() async throws {
         let cleanDir = Self.fixtureRoot.appending(path: "Clean")
         let files = try FileManager.default.contentsOfDirectory(
             at: cleanDir, includingPropertiesForKeys: nil
@@ -33,7 +33,7 @@ import Testing
         #expect(!files.isEmpty)
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
-            let report = Analyzer().analyze(source: source, path: file.lastPathComponent)
+            let report = await Analyzer().analyze(source: source, path: file.lastPathComponent)
             #expect(
                 report.findings.isEmpty,
                 "unexpected findings in \(file.lastPathComponent): \(report.findings)")
@@ -41,7 +41,7 @@ import Testing
     }
 
     @Test("Findings fixtures: exact expected finding sets")
-    func findingsFixturesMatchExpectations() throws {
+    func findingsFixturesMatchExpectations() async throws {
         let dir = Self.fixtureRoot.appending(path: "Findings")
         guard FileManager.default.fileExists(atPath: dir.path) else { return }
         let files = try FileManager.default.contentsOfDirectory(
@@ -49,7 +49,7 @@ import Testing
         ).filter { $0.pathExtension == "swift" }
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
-            let report = Analyzer().analyze(source: source, path: file.lastPathComponent)
+            let report = await Analyzer().analyze(source: source, path: file.lastPathComponent)
             let expected = expectations(in: source, verb: "expect")
                 .map { "\($0.line):\($0.rule)" }.sorted()
             let actual = report.findings.map { "\($0.line):\($0.rule.rawValue)" }.sorted()
