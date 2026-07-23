@@ -1,185 +1,106 @@
 //  NearCloneDetector.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
 
-
 // MARK: - NormalizedWindow
 
 /// A window of normalized tokens with its hash.
 struct NormalizedWindow: Sendable, GroupableWindow {
-    let file: String
-    let hash: UInt64
-    let startIndex: Int
-    let endIndex: Int
-    let startLine: Int
-    let startColumn: Int
-    let endLine: Int
-    let normalizedTokens: [String]
-    let originalTokens: [String]
+  let file: String
+  let hash: UInt64
+  let startIndex: Int
+  let endIndex: Int
+  let startLine: Int
+  let startColumn: Int
+  let endLine: Int
+  let normalizedTokens: [String]
+  let originalTokens: [String]
 
-    func matches(_ other: Self) -> Bool {
-        normalizedTokens == other.normalizedTokens
-    }
+  func matches(_ other: Self) -> Bool {
+    normalizedTokens == other.normalizedTokens
+  }
 }
 
 // MARK: - NearCloneDetector
 
 /// Detects near-clones using normalized token comparison.
 struct NearCloneDetector: Sendable {
-    // MARK: Lifecycle
+  /// Minimum number of tokens to consider.
+  let minimumTokens: Int
 
-    init(
-        minimumTokens: Int = 50,
-        minimumSimilarity: Double = 0.8,
-    ) {
-        self.minimumTokens = minimumTokens
-        self.minimumSimilarity = minimumSimilarity
-        normalizer = .default
+  /// Minimum similarity threshold (0.0 to 1.0).
+  let minimumSimilarity: Double
+
+  /// Token normalizer.
+  private let normalizer: TokenNormalizer
+
+  init(
+    minimumTokens: Int = 50,
+    minimumSimilarity: Double = 0.8
+  ) {
+    self.minimumTokens = minimumTokens
+    self.minimumSimilarity = minimumSimilarity
+    normalizer = .default
+  }
+
+  /// Detect near-clones across multiple token sequences.
+  func detect(in sequences: [TokenSequence]) -> [CloneGroup] {
+    guard minimumTokens > 0 else { return [] }
+
+    var windows: [NormalizedWindow] = []
+    for normalized in sequences.map(normalizer.normalize) {
+      guard normalized.tokens.count >= minimumTokens else { continue }
+      let normalizedTexts = normalized.tokens.map(\.normalized)
+      let originalTexts = normalized.tokens.map(\.original)
+      let sourceTokens = normalized.tokens
+      windows += RollingWindows.scan(
+        texts: normalizedTexts, windowSize: minimumTokens
+      ) { start, hash in
+        let end = start + minimumTokens
+        return NormalizedWindow(
+          file: normalized.file,
+          hash: hash,
+          startIndex: start,
+          endIndex: end - 1,
+          startLine: sourceTokens[start].line,
+          startColumn: sourceTokens[start].column,
+          endLine: sourceTokens[end - 1].line,
+          normalizedTokens: Array(normalizedTexts[start..<end]),
+          originalTokens: Array(originalTexts[start..<end])
+        )
+      }
     }
 
-    // MARK: Public
+    return RollingWindows.detectGroups(
+      windows: windows, overlapThreshold: minimumTokens / 2
+    ) { group, hash in
+      // Similarity over the ORIGINAL tokens separates true near-clones
+      // from unrelated code that merely shares a normalized shape.
+      let similarity = Self.groupSimilarity(group)
+      guard similarity >= minimumSimilarity else { return nil }
+      return CloneGroup(
+        type: .near,
+        clones: group.map { $0.clone(tokenCount: minimumTokens) },
+        similarity: similarity,
+        fingerprint: String(hash)
+      )
+    }
+  }
 
-    /// Minimum number of tokens to consider.
-    let minimumTokens: Int
+  /// Average pairwise Jaccard similarity of the original token texts.
+  private static func groupSimilarity(_ group: [NormalizedWindow]) -> Double {
+    guard group.count >= 2 else { return 0 }
 
-    /// Minimum similarity threshold (0.0 to 1.0).
-    let minimumSimilarity: Double
+    var totalSimilarity = 0.0
+    var comparisons = 0
 
-    /// Detect near-clones across multiple token sequences.
-    func detect(in sequences: [TokenSequence]) -> [CloneGroup] {
-        guard minimumTokens > 0 else { return [] }
-
-        // Normalize all sequences
-        let normalizedSequences = sequences.map { normalizer.normalize($0) }
-
-        // Build hash table of normalized windows
-        var hashTable: [UInt64: [NormalizedWindow]] = [:]
-        let rollingHash = RollingHash(windowSize: minimumTokens)
-
-        for sequence in normalizedSequences {
-            let windows = extractNormalizedWindows(from: sequence, rollingHash: rollingHash)
-            for window in windows {
-                hashTable[window.hash, default: []].append(window)
-            }
-        }
-
-        // Find groups with matching normalized tokens
-        var cloneGroups: [CloneGroup] = []
-
-        for (hash, windows) in hashTable where windows.count >= 2 {
-            let verified = verifyAndGroupNearClones(windows)
-            for group in verified {
-                let clones = group.map { window in
-                    Clone(
-                        file: window.file,
-                        startLine: window.startLine,
-                        startColumn: window.startColumn,
-                        endLine: window.endLine,
-                        tokenCount: minimumTokens,
-                        codeSnippet: ""
-                    )
-                }
-
-                if clones.count >= 2 {
-                    // Calculate similarity based on original tokens
-                    let similarity = calculateGroupSimilarity(group)
-
-                    if similarity >= minimumSimilarity {
-                        cloneGroups.append(
-                            CloneGroup(
-                                type: .near,
-                                clones: clones,
-                                similarity: similarity,
-                                fingerprint: String(hash),
-                            ))
-                    }
-                }
-            }
-        }
-
-        return cloneGroups.deduplicated()
+    for (first, second) in group.pairCombinations() {
+      totalSimilarity += CloneDetectionUtilities.jaccardSimilarity(
+        first.originalTokens,
+        second.originalTokens
+      )
+      comparisons += 1
     }
 
-    // MARK: Private
-
-    /// Token normalizer.
-    private let normalizer: TokenNormalizer
-
-    /// Extract normalized windows from a sequence.
-    private func extractNormalizedWindows(
-        from sequence: NormalizedSequence,
-        rollingHash: RollingHash,
-    ) -> [NormalizedWindow] {
-        // Safety: ensure minimumTokens is valid and sequence has enough tokens
-        guard minimumTokens > 0, sequence.tokens.count >= minimumTokens else { return [] }
-
-        var windows: [NormalizedWindow] = []
-        let tokens = sequence.tokens
-        let normalizedTexts = tokens.map(\.normalized)
-        let originalTexts = tokens.map(\.original)
-
-        // Compute initial hash of normalized tokens
-        var hash = rollingHash.initialHash(Array(normalizedTexts.prefix(minimumTokens)))
-
-        // First window
-        windows.append(
-            NormalizedWindow(
-                file: sequence.file,
-                hash: hash,
-                startIndex: 0,
-                endIndex: minimumTokens - 1,
-                startLine: tokens[0].line,
-                startColumn: tokens[0].column,
-                endLine: tokens[minimumTokens - 1].line,
-                normalizedTokens: Array(normalizedTexts.prefix(minimumTokens)),
-                originalTokens: Array(originalTexts.prefix(minimumTokens))
-            ))
-
-        // Roll through remaining windows
-        let maxStartIndex = tokens.count - minimumTokens
-        guard maxStartIndex >= 1 else { return windows }
-        for i in 1...maxStartIndex {
-            let outgoing = normalizedTexts[i - 1]
-            let incoming = normalizedTexts[i + minimumTokens - 1]
-            hash = rollingHash.roll(hash: hash, outgoing: outgoing, incoming: incoming)
-
-            windows.append(
-                NormalizedWindow(
-                    file: sequence.file,
-                    hash: hash,
-                    startIndex: i,
-                    endIndex: i + minimumTokens - 1,
-                    startLine: tokens[i].line,
-                    startColumn: tokens[i].column,
-                    endLine: tokens[i + minimumTokens - 1].line,
-                    normalizedTokens: Array(normalizedTexts[i..<(i + minimumTokens)]),
-                    originalTokens: Array(originalTexts[i..<(i + minimumTokens)])
-                ))
-        }
-
-        return windows
-    }
-
-    /// Verify normalized matches and group them.
-    private func verifyAndGroupNearClones(_ windows: [NormalizedWindow]) -> [[NormalizedWindow]] {
-        CloneDetectionUtilities.groupMatchingWindows(windows, overlapThreshold: minimumTokens / 2)
-    }
-
-    /// Calculate similarity for a group based on original tokens.
-    private func calculateGroupSimilarity(_ group: [NormalizedWindow]) -> Double {
-        guard group.count >= 2 else { return 0 }
-
-        // Compare each pair and average
-        var totalSimilarity = 0.0
-        var comparisons = 0
-
-        for (first, second) in group.pairCombinations() {
-            totalSimilarity += CloneDetectionUtilities.jaccardSimilarity(
-                first.originalTokens,
-                second.originalTokens
-            )
-            comparisons += 1
-        }
-
-        return comparisons > 0 ? totalSimilarity / Double(comparisons) : 0
-    }
+    return comparisons > 0 ? totalSimilarity / Double(comparisons) : 0
+  }
 }
