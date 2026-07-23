@@ -255,7 +255,7 @@ struct MinHashCloneDetector: Sendable {
   /// resizing through several powers of two as documents stream in.
   private func estimatedDocumentCount(for sequences: [TokenSequence]) -> Int {
     guard minimumTokens > 0 else { return sequences.count }
-    let totalTokens = sequences.reduce(0) { $0 + $1.tokens.count }
+    let totalTokens = sequences.reduce(0) { $0 + $1.records.count }
     return max(sequences.count, totalTokens / minimumTokens)
   }
 
