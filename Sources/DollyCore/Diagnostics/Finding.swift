@@ -1,3 +1,17 @@
+/// A location related to a finding — for clone groups, one per group
+/// member beyond the anchor.
+public struct RelatedLocation: Sendable, Equatable, Codable {
+  public let path: String
+  public let line: Int
+  public let column: Int
+
+  public init(path: String, line: Int, column: Int) {
+    self.path = path
+    self.line = line
+    self.column = column
+  }
+}
+
 /// A single diagnostic produced by a rule.
 public struct Finding: Sendable, Equatable {
   public let rule: RuleID
@@ -8,6 +22,10 @@ public struct Finding: Sendable, Equatable {
   public let message: String
   /// Optional secondary context (retention path, doc citation, fix hint).
   public let note: String?
+  /// Structured locations of the other clone-group members (the note
+  /// carries the same information as text). Not part of the fingerprint:
+  /// membership can shift without moving the anchor.
+  public let related: [RelatedLocation]
 
   public init(
     rule: RuleID,
@@ -16,7 +34,8 @@ public struct Finding: Sendable, Equatable {
     line: Int,
     column: Int,
     message: String,
-    note: String? = nil
+    note: String? = nil,
+    related: [RelatedLocation] = []
   ) {
     self.rule = rule
     self.severity = severity
@@ -25,6 +44,7 @@ public struct Finding: Sendable, Equatable {
     self.column = column
     self.message = message
     self.note = note
+    self.related = related
   }
 }
 
@@ -40,7 +60,7 @@ extension Finding: Comparable {
 
 extension Finding: Codable {
   private enum CodingKeys: String, CodingKey {
-    case rule, severity, path, line, column, message, note, fingerprint
+    case rule, severity, path, line, column, message, note, related, fingerprint
   }
 
   public init(from decoder: any Decoder) throws {
@@ -52,7 +72,8 @@ extension Finding: Codable {
       line: try container.decode(Int.self, forKey: .line),
       column: try container.decode(Int.self, forKey: .column),
       message: try container.decode(String.self, forKey: .message),
-      note: try container.decodeIfPresent(String.self, forKey: .note)
+      note: try container.decodeIfPresent(String.self, forKey: .note),
+      related: try container.decodeIfPresent([RelatedLocation].self, forKey: .related) ?? []
     )
     // fingerprint is derived — ignored on decode, recomputed on access.
   }
@@ -66,6 +87,9 @@ extension Finding: Codable {
     try container.encode(column, forKey: .column)
     try container.encode(message, forKey: .message)
     try container.encodeIfPresent(note, forKey: .note)
+    if !related.isEmpty {
+      try container.encode(related, forKey: .related)
+    }
     try container.encode(fingerprint, forKey: .fingerprint)
   }
 }
