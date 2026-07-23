@@ -1,4 +1,5 @@
-import Foundation
+public import Foundation
+
 import SwiftParser
 import SwiftSyntax
 
@@ -16,13 +17,28 @@ public struct Analyzer: Sendable {
 
   public let configuration: Configuration
 
-  public init(configuration: Configuration = .default) {
+  /// Facts-cache location; nil disables caching entirely.
+  public let cacheURL: URL?
+
+  public init(configuration: Configuration = .default, cacheURL: URL? = nil) {
     self.configuration = configuration
+    self.cacheURL = cacheURL
+  }
+
+  /// The platform cache default: `~/Library/Caches/dolly/facts.json` on
+  /// macOS; the XDG cache equivalent on Linux (both via FileManager's
+  /// caches directory).
+  public static func defaultCacheURL() -> URL? {
+    FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+      .appending(path: "dolly", directoryHint: .isDirectory)
+      .appending(path: "facts.json")
   }
 
   public func analyze(files: [String]) async -> AnalysisReport {
     var report = AnalysisReport()
     report.analyzedFileCount = files.count
+
+    let cache = cacheURL.map(FactsCache.load(url:))
 
     let outcomes = await ParallelProcessor.map(
       files,
@@ -36,15 +52,50 @@ public struct Analyzer: Sendable {
           .init(path: path, detail: "read failed or exceeds size cap: \(error)"))
       }
       let source = String(decoding: data, as: UTF8.self)
-      return .prepared(Self.prepare(source: source, path: path))
+
+      guard let cache else {
+        return .prepared(Self.prepare(source: source, path: path), entry: nil, cached: false)
+      }
+      // Cache hit: fingerprint matches and the payload reconstructs
+      // cleanly — parse and extraction are skipped. Anything else is a
+      // miss (fail open) and refreshes the entry.
+      let fingerprint = FactsCache.fingerprint(of: data)
+      if let entry = cache.entry(for: path, fingerprint: fingerprint),
+        let tokens = entry.fileTokens(path: path, source: source)
+      {
+        let prepared = PreparedFile(
+          tokens: tokens, table: SuppressionTable(directives: entry.directives))
+        return .prepared(prepared, entry: entry, cached: true)
+      }
+      let (tokens, directives) = Self.extractFacts(source: source, path: path)
+      let prepared = PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
+      let entry = FactsCache.Entry(
+        fingerprint: fingerprint, tokens: tokens, directives: directives)
+      return .prepared(prepared, entry: entry, cached: false)
     }
 
     var prepared: [PreparedFile] = []
+    var freshCache = FactsCache()
     for outcome in outcomes {
       switch outcome {
-      case .prepared(let file): prepared.append(file)
-      case .degraded(let degraded): report.degradedFiles.append(degraded)
+      case .prepared(let file, let entry, let cached):
+        prepared.append(file)
+        if cached { report.cacheHits += 1 } else if cache != nil { report.cacheMisses += 1 }
+        if let entry {
+          freshCache.update(path: file.tokens.file, entry: entry)
+        }
+      case .degraded(let degraded):
+        report.degradedFiles.append(degraded)
       }
+    }
+
+    // Persist only when contents changed: fresh extractions happened, or
+    // entries for absent files were pruned (the rebuilt cache only ever
+    // contains this run's files).
+    if let cacheURL, let cache,
+      report.cacheMisses > 0 || Set(cache.entries.keys) != Set(freshCache.entries.keys)
+    {
+      freshCache.persist(url: cacheURL)
     }
 
     await runEngine(over: prepared, into: &report)
@@ -70,7 +121,7 @@ public struct Analyzer: Sendable {
   }
 
   private enum FileOutcome: Sendable {
-    case prepared(PreparedFile)
+    case prepared(PreparedFile, entry: FactsCache.Entry?, cached: Bool)
     case degraded(AnalysisReport.DegradedFile)
   }
 
@@ -78,11 +129,19 @@ public struct Analyzer: Sendable {
   /// Interning stays per-file here so preparation remains parallel-safe;
   /// `runEngine` merges the tables corpus-side.
   private static func prepare(source: String, path: String) -> PreparedFile {
+    let (tokens, directives) = extractFacts(source: source, path: path)
+    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
+  }
+
+  /// The uncached extraction path: parse, scan directives, intern tokens.
+  private static func extractFacts(
+    source: String, path: String
+  ) -> (FileTokens, [SuppressionDirective]) {
     let tree = Parser.parse(source: source)
     let converter = SourceLocationConverter(fileName: path, tree: tree)
     let directives = DirectiveScanner.scan(tree: tree, converter: converter)
     let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
-    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
+    return (tokens, directives)
   }
 
   /// Run the duplication engine across the corpus and partition results
