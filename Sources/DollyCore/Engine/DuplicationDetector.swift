@@ -131,22 +131,17 @@ struct DuplicationConfiguration: Sendable {
   /// Detection algorithm for exact/near clones.
   var algorithm: DetectionAlgorithm
 
-  /// LSH backend strategy for MinHash-driven structural clone detection.
-  var lshStrategy: LSHStrategy
-
   init(
     minimumTokens: Int = 50,
     cloneTypes: Set<CloneType> = [.exact, .near, .structural],
     minimumSimilarity: Double = 0.8,
-    algorithm: DetectionAlgorithm = .suffixArray,
-    lshStrategy: LSHStrategy = .standard
+    algorithm: DetectionAlgorithm = .suffixArray
   ) {
     // Validate and clamp to safe ranges.
     self.minimumTokens = min(max(minimumTokens, 1), 10000)
     self.cloneTypes = cloneTypes
     self.minimumSimilarity = min(max(minimumSimilarity, 0.0), 1.0)
     self.algorithm = algorithm
-    self.lshStrategy = lshStrategy
   }
 }
 
@@ -178,14 +173,14 @@ struct DuplicationDetector: Sendable {
   /// - Returns: Array of clone groups found.
   func detectClones(in corpus: TokenCorpus) async -> [CloneGroup] {
     // When near clones are requested under the minHashLSH algorithm,
-    // route them through `MinHashCloneDetector` rather than the
+    // route them through the structural detector rather than the
     // token-window engine — and relabel its inherently structural
     // output as `.near` to match the requested clone type.
-    let routeNearThroughMinHash =
+    let routeNearThroughStructural =
       configuration.cloneTypes.contains(.near)
       && configuration.algorithm == .minHashLSH
     var engineTypes = configuration.cloneTypes.intersection([.exact, .near])
-    if routeNearThroughMinHash {
+    if routeNearThroughStructural {
       engineTypes.remove(.near)
     }
 
@@ -197,8 +192,8 @@ struct DuplicationDetector: Sendable {
       cloneGroups.append(contentsOf: engine.detectClones(in: corpus, types: engineTypes))
     }
 
-    if routeNearThroughMinHash {
-      let nearClones = await detectMinHashClones(in: corpus.sequences, labelledAs: .near)
+    if routeNearThroughStructural {
+      let nearClones = await detectStructuralClones(in: corpus.sequences, labelledAs: .near)
       cloneGroups.append(contentsOf: nearClones)
     }
 
@@ -211,26 +206,24 @@ struct DuplicationDetector: Sendable {
   /// genuinely overlaps the caller's serial suffix-array work.
   @concurrent private func structuralGroups(in corpus: TokenCorpus) async -> [CloneGroup] {
     guard configuration.cloneTypes.contains(.structural) else { return [] }
-    return await detectMinHashClones(in: corpus.sequences, labelledAs: .structural)
+    return await detectStructuralClones(in: corpus.sequences, labelledAs: .structural)
   }
 
-  /// Run MinHash+LSH clone detection and relabel its inherently
+  /// Run structural clone detection and relabel its inherently
   /// structural output to the requested clone type.
-  private func detectMinHashClones(
+  private func detectStructuralClones(
     in sequences: [TokenSequence],
     labelledAs label: CloneType
   ) async -> [CloneGroup] {
-    let detector = MinHashCloneDetector(
+    let detector = StructuralCloneDetector(
       minimumTokens: configuration.minimumTokens,
       shingleSize: 5,
-      numHashes: 256,
       minimumSimilarity: configuration.minimumSimilarity,
       parallelConfig: ParallelCloneConfiguration(
         maxConcurrency: concurrency.maxConcurrentTasks
-      ),
-      lshStrategy: configuration.lshStrategy
+      )
     )
-    let groups = await detector.detectParallel(in: sequences)
+    let groups = await detector.detect(in: sequences)
     guard label != .structural else { return groups }
     return groups.map { group in
       CloneGroup(
