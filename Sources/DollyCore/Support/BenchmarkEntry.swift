@@ -12,19 +12,20 @@ import SwiftSyntax
 /// Opaque corpus handle passed between benchmark stages so per-stage
 /// benchmarks can share one extraction pass without exposing engine types.
 @_spi(Benchmark) public struct BenchmarkTokenCorpus: Sendable {
-  let sequences: [TokenSequence]
+  let corpus: TokenCorpus
 }
 
 /// Namespace for the SPI benchmark hooks.
 @_spi(Benchmark) public enum BenchmarkEntry {
-  /// Extraction stage: parse + token-sequence extraction, per file.
+  /// Extraction stage: parse + per-file interned extraction + corpus
+  /// assembly (the one corpus-level intern pass).
   public static func extract(files: [(path: String, source: String)]) -> BenchmarkTokenCorpus {
     let extractor = TokenSequenceExtractor()
-    let sequences = files.map { file in
+    let fileTokens = files.map { file in
       let tree = Parser.parse(source: file.source)
       return extractor.extract(from: tree, file: file.path, source: file.source)
     }
-    return BenchmarkTokenCorpus(sequences: sequences)
+    return BenchmarkTokenCorpus(corpus: CorpusAssembler.assemble(files: fileTokens))
   }
 
   /// Exact + near suffix-array stage over a prepared corpus (the serial
@@ -34,7 +35,7 @@ import SwiftSyntax
   ) -> Int {
     let engine = DuplicationEngine(
       configuration: DuplicationConfiguration(minimumTokens: minimumTokens))
-    return engine.detectClones(in: corpus.sequences, types: [.exact, .near]).count
+    return engine.detectClones(in: corpus.corpus, types: [.exact, .near]).count
   }
 
   /// Structural stage: block shingling, candidate generation, verification,
@@ -48,6 +49,6 @@ import SwiftSyntax
       numHashes: 256,
       minimumSimilarity: minimumSimilarity
     )
-    return await detector.detectParallel(in: corpus.sequences).count
+    return await detector.detectParallel(in: corpus.corpus.sequences).count
   }
 }

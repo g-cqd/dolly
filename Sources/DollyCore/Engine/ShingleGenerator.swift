@@ -1,22 +1,19 @@
 //  ShingleGenerator.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
+//
+//  D2: shingles hash interned ids with integer FNV — no per-token string
+//  materialization, no per-window token copies. A shingle is a hash plus
+//  its position, nothing else.
 
 // MARK: - Shingle
 
-/// A shingle (n-gram) of tokens with its hash.
+/// A shingle (n-gram) of tokens: its hash and starting position.
 struct Shingle: Sendable, Hashable {
-  // MARK: Lifecycle
-
-  // MARK: Public
-
   /// Hash value of the shingle.
   let hash: UInt64
 
   /// Starting position in the token sequence.
   let position: Int
-
-  /// The tokens comprising this shingle (for debugging).
-  let tokens: [String]
 }
 
 // MARK: - ShingledDocument
@@ -74,7 +71,7 @@ struct ShingledDocument: Sendable {
 
 // MARK: - ShingleGenerator
 
-/// Generates shingles from token sequences.
+/// Generates shingles from interned token records.
 struct ShingleGenerator: Sendable {
   // MARK: Lifecycle
 
@@ -91,84 +88,76 @@ struct ShingleGenerator: Sendable {
   /// Whether to normalize identifiers/literals.
   let normalize: Bool
 
-  /// Generate shingles from a token sequence.
-  ///
-  /// - Parameters:
-  ///   - tokens: The token texts.
-  ///   - kinds: The token kinds (for normalization).
-  /// - Returns: Array of shingles.
-  func generate(tokens: [String], kinds: [TokenKind]? = nil) -> [Shingle] {
-    generate(tokens: ArraySlice(tokens), kinds: kinds.map { ArraySlice($0) })
-  }
+  /// Tag bits distinguishing normalized ordinal codes from raw ids.
+  /// Raw corpus ids are < 2^32, so codes with either tag can never
+  /// collide with them (or with each other).
+  private static let identifierTag: UInt64 = 1 &<< 33
+  private static let literalTag: UInt64 = 1 &<< 34
 
-  /// Generate shingles from a slice of a token sequence.
+  /// Generate shingles from a slice of interned records.
   ///
-  /// Accepting `ArraySlice` lets the duplication-detector hot path
-  /// (`generateBlockDocuments`) reuse a single owning `[String]` /
-  /// `[TokenKind]` allocation across many block windows, instead of
-  /// `Array(tokens[i..<j])`-copying per window.
-  func generate(tokens: ArraySlice<String>, kinds: ArraySlice<TokenKind>?) -> [Shingle] {
-    guard tokens.count >= shingleSize else { return [] }
+  /// Normalization assigns positional first-occurrence ordinals to
+  /// identifiers and literals over the WHOLE slice (rawID-keyed — text
+  /// and rawID are bijective corpus-wide), so renamed identifiers and
+  /// changed literals compare equal while distinct names stay
+  /// distinguishable within the block. This mirrors the pre-D2 string
+  /// placeholders (`$ID0`, `$LIT0`, ...) exactly; deliberately NOT the
+  /// corpus-uniform `normID` lane, which would conflate all identifiers
+  /// and loosen the structural stage's precision.
+  func generate(
+    records: ArraySlice<TokenRecord>, kinds: ArraySlice<TokenKind>
+  ) -> [Shingle] {
+    guard records.count >= shingleSize else { return [] }
 
-    let normalizedTokens: ArraySlice<String> =
-      if normalize, let kinds {
-        ArraySlice(normalizedTexts(zip(tokens, kinds)))
-      } else {
-        tokens
+    var codes: [UInt64] = []
+    codes.reserveCapacity(records.count)
+    if normalize {
+      var identifierOrdinals: [UInt32: UInt64] = [:]
+      var literalOrdinals: [UInt32: UInt64] = [:]
+      for (record, kind) in zip(records, kinds) {
+        switch kind {
+        case .identifier:
+          if let ordinal = identifierOrdinals[record.rawID] {
+            codes.append(Self.identifierTag | ordinal)
+          } else {
+            let ordinal = UInt64(identifierOrdinals.count)
+            identifierOrdinals[record.rawID] = ordinal
+            codes.append(Self.identifierTag | ordinal)
+          }
+        case .literal:
+          if let ordinal = literalOrdinals[record.rawID] {
+            codes.append(Self.literalTag | ordinal)
+          } else {
+            let ordinal = UInt64(literalOrdinals.count)
+            literalOrdinals[record.rawID] = ordinal
+            codes.append(Self.literalTag | ordinal)
+          }
+        case .keyword, .operator, .punctuation, .unknown:
+          codes.append(UInt64(record.rawID))
+        }
       }
+    } else {
+      for record in records {
+        codes.append(UInt64(record.rawID))
+      }
+    }
 
     var shingles: [Shingle] = []
-    shingles.reserveCapacity(normalizedTokens.count - shingleSize + 1)
+    shingles.reserveCapacity(codes.count - shingleSize + 1)
 
-    let windowCount = normalizedTokens.count - shingleSize + 1
-    let base = normalizedTokens.startIndex
+    let windowCount = codes.count - shingleSize + 1
     for i in 0..<windowCount {
-      let shingleTokens = Array(normalizedTokens[(base + i)..<(base + i + shingleSize)])
-      let hash = computeShingleHash(shingleTokens)
-      shingles.append(Shingle(hash: hash, position: i, tokens: shingleTokens))
+      let hash = Self.computeShingleHash(codes[i..<(i + shingleSize)])
+      shingles.append(Shingle(hash: hash, position: i))
     }
 
     return shingles
   }
 
-  /// Generate shingles from a TokenSequence.
-  ///
-  /// - Parameter sequence: The token sequence.
-  /// - Returns: Shingled document.
-  func generateDocument(
-    from sequence: TokenSequence,
-    id: Int,
-  ) -> ShingledDocument {
-    let tokens = sequence.tokens.map(\.text)
-    let kinds = sequence.tokens.map(\.kind)
-    let shingles = generate(tokens: ArraySlice(tokens), kinds: ArraySlice(kinds))
-
-    let startLine = sequence.tokens.first?.line ?? 1
-    let startColumn = sequence.tokens.first?.column ?? 1
-    let endLine = sequence.tokens.last?.line ?? startLine
-
-    return ShingledDocument(
-      file: sequence.file,
-      startLine: startLine,
-      startColumn: startColumn,
-      endLine: endLine,
-      tokenCount: sequence.tokens.count,
-      shingleHashes: shingleHashSet(from: shingles),
-      shingles: shingles,
-      id: id,
-    )
-  }
-
   /// Generate shingled documents from code blocks within a file.
   ///
-  /// This breaks the file into logical blocks (functions, classes) for comparison.
-  ///
-  /// Iterates `ArraySlice<TokenInfo>` directly to avoid two N-element
-  /// allocations (`[String]` of texts + `[TokenKind]` of kinds) per
-  /// file on the hottest duplication code path. Now the
-  /// per-window iterator operates on `sequence.tokens[i..<j]` and
-  /// the shared shingle/normalize pipeline derives strings and
-  /// kinds on demand from the same `TokenInfo` slice.
+  /// This breaks the file into logical blocks (50%-overlap windows) for
+  /// comparison.
   ///
   /// - Parameters:
   ///   - sequence: The full file token sequence.
@@ -180,29 +169,28 @@ struct ShingleGenerator: Sendable {
     blockSize: Int,
     startId: Int,
   ) -> [ShingledDocument] {
-    guard sequence.tokens.count >= blockSize else { return [] }
+    let records = sequence.records
+    guard records.count >= blockSize else { return [] }
 
     let stride = max(1, blockSize / 2)  // 50% overlap
 
     var documents: [ShingledDocument] = []
-    documents.reserveCapacity((sequence.tokens.count - blockSize) / stride + 1)
+    documents.reserveCapacity((records.count - blockSize) / stride + 1)
     var currentId = startId
 
     var i = 0
-    while i + blockSize <= sequence.tokens.count {
-      let blockTokens = sequence.tokens[i..<(i + blockSize)]
-      let shingles = generate(tokenInfos: blockTokens)
-
-      let startLine = sequence.tokens[i].line
-      let startColumn = sequence.tokens[i].column
-      let endLine = sequence.tokens[i + blockSize - 1].line
+    while i + blockSize <= records.count {
+      let shingles = generate(
+        records: records[i..<(i + blockSize)],
+        kinds: sequence.kinds[i..<(i + blockSize)]
+      )
 
       documents.append(
         ShingledDocument(
           file: sequence.file,
-          startLine: startLine,
-          startColumn: startColumn,
-          endLine: endLine,
+          startLine: Int(records[i].line),
+          startColumn: Int(records[i].column),
+          endLine: Int(records[i + blockSize - 1].line),
           tokenCount: blockSize,
           shingleHashes: shingleHashSet(from: shingles),
           shingles: shingles,
@@ -214,84 +202,6 @@ struct ShingleGenerator: Sendable {
     }
 
     return documents
-  }
-
-  /// Generate shingles directly from a `TokenInfo` slice, avoiding the
-  /// two per-file `[String]` / `[TokenKind]` allocations that the
-  /// `(tokens: ArraySlice<String>, kinds: ArraySlice<TokenKind>?)`
-  /// overload triggers when invoked from
-  /// `generateBlockDocuments`. Normalisation reads `text`/`kind`
-  /// directly off each `TokenInfo`; per-window text strings are
-  /// captured lazily and only the shingle hash + a single
-  /// `[String]` slot in `Shingle.tokens` survive (callers can
-  /// inspect the raw window if they care).
-  func generate(tokenInfos: ArraySlice<TokenInfo>) -> [Shingle] {
-    guard tokenInfos.count >= shingleSize else { return [] }
-
-    // Normalised text per position. Reuses one growing dictionary
-    // per call instead of allocating a helper `[String]` return
-    // value.
-    let normalised: [String]
-    if normalize {
-      normalised = normalizedTexts(tokenInfos.lazy.map { ($0.text, $0.kind) })
-    } else {
-      // No normalisation: capture the raw text strings as we go.
-      normalised = tokenInfos.map(\.text)
-    }
-
-    var shingles: [Shingle] = []
-    shingles.reserveCapacity(normalised.count - shingleSize + 1)
-
-    let windowCount = normalised.count - shingleSize + 1
-    for i in 0..<windowCount {
-      let window = Array(normalised[i..<(i + shingleSize)])
-      let hash = computeShingleHash(window)
-      shingles.append(Shingle(hash: hash, position: i, tokens: window))
-    }
-
-    return shingles
-  }
-
-  /// Normalise `(text, kind)` pairs into a flat `[String]`, assigning
-  /// positional placeholders (`$ID0`, `$LIT0`, ...) so renamed identifiers
-  /// and changed literals compare equal while distinct names stay
-  /// distinguishable within the window. One implementation serves both
-  /// the `TokenInfo`-driven and paired-array call sites.
-  private func normalizedTexts(_ pairs: some Sequence<(String, TokenKind)>) -> [String] {
-    var result: [String] = []
-    var identifierMap: [String: String] = [:]
-    var literalMap: [String: String] = [:]
-    var identifierCount = 0
-    var literalCount = 0
-
-    for (text, kind) in pairs {
-      switch kind {
-      case .identifier:
-        if let normalized = identifierMap[text] {
-          result.append(normalized)
-        } else {
-          let normalized = "$ID\(identifierCount)"
-          identifierMap[text] = normalized
-          identifierCount += 1
-          result.append(normalized)
-        }
-
-      case .literal:
-        if let normalized = literalMap[text] {
-          result.append(normalized)
-        } else {
-          let normalized = "$LIT\(literalCount)"
-          literalMap[text] = normalized
-          literalCount += 1
-          result.append(normalized)
-        }
-
-      default:
-        result.append(text)
-      }
-    }
-
-    return result
   }
 
   /// Build the `Set<UInt64>` of shingle hashes without the intermediate
@@ -308,24 +218,16 @@ struct ShingleGenerator: Sendable {
 
   // MARK: Private
 
-  // MARK: - Private Helpers
-
-  /// Compute hash for a shingle using FNV-1a.
-  ///
-  /// Uses 0xFF as the inter-token separator so that two different token
-  /// splits with the same concatenated bytes still produce distinct hashes.
-  private func computeShingleHash(_ tokens: [String]) -> UInt64 {
+  /// Integer FNV-1a over the window's codes: each 64-bit code is mixed
+  /// as one word. Replaces the per-string UTF-8 byte loops; equality of
+  /// code streams — the property the structural stage depends on — is
+  /// preserved because the code encoding is injective.
+  private static func computeShingleHash(_ codes: ArraySlice<UInt64>) -> UInt64 {
     var hash = FNV1a.offsetBasis
-
-    for token in tokens {
-      for byte in token.utf8 {
-        hash ^= UInt64(byte)
-        hash = hash &* FNV1a.prime
-      }
-      hash ^= 0xFF
+    for code in codes {
+      hash ^= code
       hash = hash &* FNV1a.prime
     }
-
     return hash
   }
 }
@@ -349,14 +251,9 @@ extension ShingleGenerator {
 
     for i in 0...(chars.count - k) {
       let shingle = String(chars[i..<(i + k)])
-      hashes.insert(computeStringHash(shingle))
+      hashes.insert(FNV1a.hash(shingle))
     }
 
     return hashes
-  }
-
-  /// Compute hash for a string.
-  private func computeStringHash(_ string: String) -> UInt64 {
-    FNV1a.hash(string)
   }
 }

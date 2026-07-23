@@ -28,30 +28,6 @@ struct SuffixArray: Sendable {
     }
   }
 
-  /// Creates a suffix array from an array of strings.
-  ///
-  /// - Parameter strings: Array of string tokens.
-  /// - Returns: The suffix array and the token-to-ID mapping.
-  static func fromStrings(_ strings: [String]) -> (Self, [String: Int]) {
-    // Build alphabet mapping and convert to token IDs in one pass
-    var alphabet: [String: Int] = [:]
-    var tokens: [Int] = []
-    tokens.reserveCapacity(strings.count)
-    var nextId = 1  // Reserve 0 for sentinel
-
-    for s in strings {
-      if let existingId = alphabet[s] {
-        tokens.append(existingId)
-      } else {
-        alphabet[s] = nextId
-        tokens.append(nextId)
-        nextId += 1
-      }
-    }
-
-    return (Self(tokens: tokens), alphabet)
-  }
-
   /// Get the suffix starting at the i-th position in sorted order.
   subscript(i: Int) -> Int {
     array[i]

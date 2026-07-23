@@ -168,11 +168,11 @@ struct DuplicationDetector: Sendable {
     self.concurrency = concurrency
   }
 
-  /// Detect clones in the given token sequences.
+  /// Detect clones in the given corpus.
   ///
-  /// - Parameter sequences: Token sequences from parsed files.
+  /// - Parameter corpus: Assembled token corpus from parsed files.
   /// - Returns: Array of clone groups found.
-  func detectClones(in sequences: [TokenSequence]) async -> [CloneGroup] {
+  func detectClones(in corpus: TokenCorpus) async -> [CloneGroup] {
     var cloneGroups: [CloneGroup] = []
 
     // When near clones are requested under the minHashLSH algorithm,
@@ -189,16 +189,17 @@ struct DuplicationDetector: Sendable {
 
     if !engineTypes.isEmpty {
       let engine = DuplicationEngine(configuration: configuration)
-      cloneGroups.append(contentsOf: engine.detectClones(in: sequences, types: engineTypes))
+      cloneGroups.append(contentsOf: engine.detectClones(in: corpus, types: engineTypes))
     }
 
     if routeNearThroughMinHash {
-      let nearClones = await detectMinHashClones(in: sequences, labelledAs: .near)
+      let nearClones = await detectMinHashClones(in: corpus.sequences, labelledAs: .near)
       cloneGroups.append(contentsOf: nearClones)
     }
 
     if configuration.cloneTypes.contains(.structural) {
-      let structuralClones = await detectMinHashClones(in: sequences, labelledAs: .structural)
+      let structuralClones = await detectMinHashClones(
+        in: corpus.sequences, labelledAs: .structural)
       cloneGroups.append(contentsOf: structuralClones)
     }
 
@@ -311,13 +312,16 @@ enum CloneDetectionUtilities {
     return overlap > threshold
   }
 
-  /// Calculate Jaccard similarity between two token sequences.
+  /// Calculate Jaccard similarity between two token sequences (interned
+  /// ids or any other hashable token representation).
   ///
   /// - Parameters:
   ///   - tokens1: First token sequence.
   ///   - tokens2: Second token sequence.
   /// - Returns: Jaccard similarity coefficient (0.0 to 1.0).
-  static func jaccardSimilarity(_ tokens1: [String], _ tokens2: [String]) -> Double {
+  static func jaccardSimilarity<Token: Hashable>(
+    _ tokens1: some Sequence<Token>, _ tokens2: some Sequence<Token>
+  ) -> Double {
     let set1 = Set(tokens1)
     let set2 = Set(tokens2)
 
