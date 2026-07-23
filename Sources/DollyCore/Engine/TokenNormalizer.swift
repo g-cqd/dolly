@@ -1,41 +1,9 @@
 //  TokenNormalizer.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
-
-// MARK: - NormalizedToken
-
-/// A normalized token for near-clone detection.
-struct NormalizedToken: Sendable, Hashable {
-  // MARK: Lifecycle
-
-  // MARK: Public
-
-  /// The normalized representation.
-  let normalized: String
-
-  /// The original token text.
-  let original: String
-
-  /// The token kind.
-  let kind: TokenKind
-
-  /// Line number.
-  let line: Int
-
-  /// Column number.
-  let column: Int
-}
-
-// MARK: - NormalizedSequence
-
-/// A sequence of normalized tokens.
-typealias NormalizedSequence = TokenSequenceOf<NormalizedToken>
-
-extension TokenSequenceOf where Token == NormalizedToken {
-  /// Get the normalized token texts for hashing.
-  var normalizedTexts: [String] {
-    tokens.map(\.normalized)
-  }
-}
+//
+//  Since D2 the normalizer is consulted once per token at intern time
+//  (extraction); the interned `normID` lane carries its verdict through
+//  the rest of the pipeline.
 
 // MARK: - TokenNormalizer
 
@@ -94,55 +62,35 @@ struct TokenNormalizer: Sendable {
   /// Identifiers to preserve (not normalize).
   var preservedIdentifiers: Set<String>
 
-  /// Normalize a token sequence.
-  func normalize(_ sequence: TokenSequence) -> NormalizedSequence {
-    let normalizedTokens = sequence.tokens.map { token -> NormalizedToken in
-      let normalized = normalizeToken(token)
-      return NormalizedToken(
-        normalized: normalized,
-        original: token.text,
-        kind: token.kind,
-        line: token.line,
-        column: token.column,
-      )
-    }
-
-    return NormalizedSequence(
-      file: sequence.file,
-      tokens: normalizedTokens,
-      sourceLines: sequence.sourceLines,
-      boundaries: sequence.boundaries
-    )
-  }
-
-  // MARK: Private
-
-  /// Normalize a single token.
-  private func normalizeToken(_ token: TokenInfo) -> String {
-    switch token.kind {
+  /// The normalized text for one token, or nil when the token normalizes
+  /// to itself (so the caller can reuse the raw intern id).
+  func normalizedText(kind: TokenKind, text: String) -> String? {
+    switch kind {
     case .identifier:
       // Check for closure shorthand parameters ($0, $1, etc.)
-      if normalizeClosureParams, isShorthandParameter(token.text) {
+      if normalizeClosureParams, isShorthandParameter(text) {
         return Self.shorthandParamPlaceholder
       }
-      if normalizeIdentifiers, !preservedIdentifiers.contains(token.text) {
+      if normalizeIdentifiers, !preservedIdentifiers.contains(text) {
         return Self.identifierPlaceholder
       }
-      return token.text
+      return nil
 
     case .literal:
       if normalizeLiterals {
-        return classifyLiteral(token.text)
+        return classifyLiteral(text)
       }
-      return token.text
+      return nil
 
     case .keyword,
       .operator,
       .punctuation,
       .unknown:
-      return token.text
+      return nil
     }
   }
+
+  // MARK: Private
 
   /// Check if an identifier is a closure shorthand parameter.
   private func isShorthandParameter(_ text: String) -> Bool {
