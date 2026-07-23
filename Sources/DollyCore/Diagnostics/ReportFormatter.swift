@@ -113,11 +113,22 @@ public enum ReportFormatter {
     let level: String
     let message: SarifText
     let locations: [SarifLocation]
+    /// One location per clone-group member beyond the anchor, so SARIF
+    /// consumers can jump to every duplicate (nil when the finding has no
+    /// group members — optionals are omitted from the payload).
+    let relatedLocations: [SarifLocation]?
     let partialFingerprints: [String: String]
   }
 
   private struct SarifLocation: Encodable {
     let physicalLocation: SarifPhysicalLocation
+    /// Optional label (used for related locations).
+    let message: SarifText?
+
+    init(physicalLocation: SarifPhysicalLocation, message: SarifText? = nil) {
+      self.physicalLocation = physicalLocation
+      self.message = message
+    }
   }
 
   private struct SarifPhysicalLocation: Encodable {
@@ -153,6 +164,17 @@ public enum ReportFormatter {
             )
           )
         ],
+        relatedLocations: finding.related.isEmpty
+          ? nil
+          : finding.related.map { member in
+            SarifLocation(
+              physicalLocation: SarifPhysicalLocation(
+                artifactLocation: SarifArtifactLocation(uri: member.path),
+                region: SarifRegion(startLine: member.line, startColumn: member.column)
+              ),
+              message: SarifText(text: "duplicate region")
+            )
+          },
         partialFingerprints: ["dolly/v1": finding.fingerprint]
       )
     }
