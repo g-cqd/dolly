@@ -138,8 +138,16 @@ struct SuffixArrayCloneDetector: Sendable {
 
   /// Build a concatenated token stream from multiple sequences.
   ///
-  /// Tokens are converted to integers, and sentinel values are inserted
-  /// between files to prevent cross-file matches.
+  /// Tokens are converted to integers, and unique sentinel values are
+  /// inserted between files AND at every top-level declaration boundary.
+  /// The boundary separators make same-file declaration pairs isomorphic
+  /// to cross-file pairs: without them, 3+ normalized-identical adjacent
+  /// declarations form one periodic run whose overlapping shifted repeats
+  /// (length 2L-p) outrank the true group (length L) in
+  /// `mergeOverlappingGroups`, after which `filterOverlappingClones`
+  /// reduces the survivor to a single location and the group is dropped.
+  /// Periodic content inside ONE declaration still self-overlaps and is
+  /// still filtered — that protection is intentional and unchanged.
   private func buildStream<S: Collection>(
     from sequences: S,
     tokenAccessor: (S.Element, Int) -> TokenAccessorResult
@@ -147,10 +155,36 @@ struct SuffixArrayCloneDetector: Sendable {
     var tokens: [Int] = []
     var infos: [TokenStreamInfo] = []
     var tokenIdMap: [String: Int] = [:]
-    var nextTokenId = 1  // 0 reserved for separators
+    var nextTokenId = 1  // 0 reserved for the SA-IS sentinel
+
+    func appendSeparator(fileIndex: Int) {
+      tokens.append(nextTokenId)
+      nextTokenId += 1
+      infos.append(
+        TokenStreamInfo(
+          fileIndex: fileIndex,
+          line: -1,
+          column: -1,
+          originalText: "<SEP>"
+        ))
+    }
 
     for (fileIndex, sequence) in sequences.enumerated() {
+      let boundaries = sequence.boundaries
+      var nextBoundary = 0
+
       for tokenIdx in 0..<sequence.tokenCount {
+        while nextBoundary < boundaries.count, boundaries[nextBoundary] < tokenIdx {
+          nextBoundary += 1
+        }
+        if nextBoundary < boundaries.count, boundaries[nextBoundary] == tokenIdx {
+          nextBoundary += 1
+          // The file separator already guards the head of the file.
+          if tokenIdx > 0 {
+            appendSeparator(fileIndex: fileIndex)
+          }
+        }
+
         let accessor = tokenAccessor(sequence, tokenIdx)
         let tokenId: Int
         if let existingId = tokenIdMap[accessor.text] {
@@ -171,17 +205,8 @@ struct SuffixArrayCloneDetector: Sendable {
           ))
       }
 
-      // Add separator between files (unique sentinel)
-      let separatorId = nextTokenId
-      nextTokenId += 1
-      tokens.append(separatorId)
-      infos.append(
-        TokenStreamInfo(
-          fileIndex: fileIndex,
-          line: -1,
-          column: -1,
-          originalText: "<SEP>"
-        ))
+      // Separator between files (unique sentinel).
+      appendSeparator(fileIndex: fileIndex)
     }
 
     return TokenStreamResult(tokens: tokens, infos: infos)

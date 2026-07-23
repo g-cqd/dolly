@@ -45,6 +45,8 @@ protocol TokenSequenceProtocol: Sendable {
   var file: String { get }
   /// Number of tokens in the sequence.
   var tokenCount: Int { get }
+  /// Token indices that start a new top-level declaration (ascending).
+  var boundaries: [Int] { get }
 }
 
 // MARK: - TokenSequenceOf
@@ -61,6 +63,21 @@ struct TokenSequenceOf<Token: Sendable & Hashable>: Sendable, TokenSequenceProto
 
   /// Source lines for snippet extraction.
   let sourceLines: [String]
+
+  /// Indices of tokens that begin a new top-level declaration or statement
+  /// (ascending). The suffix-array stream builder emits a unique separator
+  /// at each boundary so same-file declaration pairs are isomorphic to
+  /// cross-file pairs; without them, runs of 3+ normalized-identical
+  /// declarations form one periodic run whose overlapping shifted matches
+  /// outrank and then annihilate the true clone group.
+  let boundaries: [Int]
+
+  init(file: String, tokens: [Token], sourceLines: [String], boundaries: [Int] = []) {
+    self.file = file
+    self.tokens = tokens
+    self.sourceLines = sourceLines
+    self.boundaries = boundaries
+  }
 
   /// Number of tokens in the sequence.
   var tokenCount: Int { tokens.count }
@@ -87,10 +104,23 @@ struct TokenSequenceExtractor: Sendable {
     let converter = SourceLocationConverter(fileName: file, tree: tree)
     var tokens: [TokenInfo] = []
 
+    // Start positions of every top-level item. Each becomes a stream
+    // boundary so the suffix-array stage treats same-file declarations
+    // like separate files. Boundaries stay at the top level only:
+    // separators inside a type would sever legitimate clone regions that
+    // span several members (whole-type copies, boilerplate families).
+    let boundaryPositions = Set(tree.statements.map(\.positionAfterSkippingLeadingTrivia))
+    var boundaries: [Int] = []
+    boundaries.reserveCapacity(boundaryPositions.count)
+
     for token in tree.tokens(viewMode: .sourceAccurate) {
       // Skip trivia (whitespace, comments)
       let kind = classifyToken(token)
-      let location = converter.location(for: token.positionAfterSkippingLeadingTrivia)
+      let position = token.positionAfterSkippingLeadingTrivia
+      if boundaryPositions.contains(position) {
+        boundaries.append(tokens.count)
+      }
+      let location = converter.location(for: position)
 
       tokens.append(
         TokenInfo(
@@ -101,7 +131,8 @@ struct TokenSequenceExtractor: Sendable {
         ))
     }
 
-    return TokenSequence(file: file, tokens: tokens, sourceLines: sourceLines)
+    return TokenSequence(
+      file: file, tokens: tokens, sourceLines: sourceLines, boundaries: boundaries)
   }
 
   // MARK: Private
