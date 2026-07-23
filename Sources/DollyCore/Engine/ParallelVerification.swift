@@ -24,115 +24,115 @@ import Foundation
 /// - Each pair is verified independently
 /// - Document map is read-only during verification
 struct ParallelVerifier: Sendable {
-    /// Minimum similarity threshold.
-    let minimumSimilarity: Double
+  /// Minimum similarity threshold.
+  let minimumSimilarity: Double
 
-    /// Minimum pairs to trigger parallel processing.
-    let minParallelPairs: Int
+  /// Minimum pairs to trigger parallel processing.
+  let minParallelPairs: Int
 
-    /// Maximum concurrent tasks.
-    let maxConcurrency: Int
+  /// Maximum concurrent tasks.
+  let maxConcurrency: Int
 
-    /// Create a parallel verifier.
-    ///
-    /// - Parameters:
-    ///   - minimumSimilarity: Minimum similarity threshold.
-    ///   - minParallelPairs: Minimum pairs to trigger parallelism.
-    ///   - maxConcurrency: Maximum concurrent tasks.
-    init(
-        minimumSimilarity: Double = 0.5,
-        minParallelPairs: Int = 100,
-        maxConcurrency: Int = ProcessInfo.processInfo.activeProcessorCount
-    ) {
-        self.minimumSimilarity = max(0, min(1, minimumSimilarity))
-        self.minParallelPairs = max(1, minParallelPairs)
-        self.maxConcurrency = max(1, maxConcurrency)
+  /// Create a parallel verifier.
+  ///
+  /// - Parameters:
+  ///   - minimumSimilarity: Minimum similarity threshold.
+  ///   - minParallelPairs: Minimum pairs to trigger parallelism.
+  ///   - maxConcurrency: Maximum concurrent tasks.
+  init(
+    minimumSimilarity: Double = 0.5,
+    minParallelPairs: Int = 100,
+    maxConcurrency: Int = ProcessInfo.processInfo.activeProcessorCount
+  ) {
+    self.minimumSimilarity = max(0, min(1, minimumSimilarity))
+    self.minParallelPairs = max(1, minParallelPairs)
+    self.maxConcurrency = max(1, maxConcurrency)
+  }
+
+  /// Verify candidate pairs in parallel.
+  ///
+  /// - Parameters:
+  ///   - candidatePairs: Set of candidate document pairs.
+  ///   - documentMap: Map from document ID to shingled document.
+  /// - Returns: Array of verified clone pairs above threshold.
+  func verifyCandidatePairs(
+    _ candidatePairs: Set<DocumentPair>,
+    documentMap: [Int: ShingledDocument]
+  ) async -> [ClonePairInfo] {
+    let pairs = Array(candidatePairs)
+
+    // Fall back to sequential for small batches
+    guard pairs.count >= minParallelPairs else {
+      return await verifySequential(pairs, documentMap: documentMap)
     }
 
-    /// Verify candidate pairs in parallel.
-    ///
-    /// - Parameters:
-    ///   - candidatePairs: Set of candidate document pairs.
-    ///   - documentMap: Map from document ID to shingled document.
-    /// - Returns: Array of verified clone pairs above threshold.
-    func verifyCandidatePairs(
-        _ candidatePairs: Set<DocumentPair>,
-        documentMap: [Int: ShingledDocument]
-    ) async -> [ClonePairInfo] {
-        let pairs = Array(candidatePairs)
+    // Parallel verification with chunking
+    let chunkSize = max(1, pairs.count / maxConcurrency)
 
-        // Fall back to sequential for small batches
-        guard pairs.count >= minParallelPairs else {
-            return await verifySequential(pairs, documentMap: documentMap)
+    return await withTaskGroup(of: [ClonePairInfo].self) { group in
+      for range in chunkedRanges(totalCount: pairs.count, chunkSize: chunkSize) {
+        let chunk = Array(pairs[range])
+        group.addTask {
+          await self.verifySequential(chunk, documentMap: documentMap)
         }
+      }
 
-        // Parallel verification with chunking
-        let chunkSize = max(1, pairs.count / maxConcurrency)
+      var allPairs: [ClonePairInfo] = []
+      for await partial in group {
+        allPairs.append(contentsOf: partial)
+      }
+      return allPairs
+    }
+  }
 
-        return await withTaskGroup(of: [ClonePairInfo].self) { group in
-            for range in chunkedRanges(totalCount: pairs.count, chunkSize: chunkSize) {
-                let chunk = Array(pairs[range])
-                group.addTask {
-                    await self.verifySequential(chunk, documentMap: documentMap)
-                }
-            }
+  /// Verify a single pair of documents.
+  ///
+  /// - Parameters:
+  ///   - pair: The document pair to verify.
+  ///   - documentMap: Map from document ID to shingled document.
+  /// - Returns: Clone pair info if similarity is above threshold, nil otherwise.
+  func verifyPair(
+    _ pair: DocumentPair,
+    documentMap: [Int: ShingledDocument]
+  ) -> ClonePairInfo? {
+    guard let doc1 = documentMap[pair.id1],
+      let doc2 = documentMap[pair.id2]
+    else { return nil }
 
-            var allPairs: [ClonePairInfo] = []
-            for await partial in group {
-                allPairs.append(contentsOf: partial)
-            }
-            return allPairs
-        }
+    // Skip overlapping in same file
+    if doc1.file == doc2.file {
+      let overlaps = !(doc1.endLine < doc2.startLine || doc2.endLine < doc1.startLine)
+      if overlaps { return nil }
     }
 
-    /// Verify a single pair of documents.
-    ///
-    /// - Parameters:
-    ///   - pair: The document pair to verify.
-    ///   - documentMap: Map from document ID to shingled document.
-    /// - Returns: Clone pair info if similarity is above threshold, nil otherwise.
-    func verifyPair(
-        _ pair: DocumentPair,
-        documentMap: [Int: ShingledDocument]
-    ) -> ClonePairInfo? {
-        guard let doc1 = documentMap[pair.id1],
-            let doc2 = documentMap[pair.id2]
-        else { return nil }
+    let similarity = MinHashGenerator.exactJaccardSimilarity(doc1, doc2)
 
-        // Skip overlapping in same file
-        if doc1.file == doc2.file {
-            let overlaps = !(doc1.endLine < doc2.startLine || doc2.endLine < doc1.startLine)
-            if overlaps { return nil }
-        }
+    guard similarity >= minimumSimilarity else { return nil }
 
-        let similarity = MinHashGenerator.exactJaccardSimilarity(doc1, doc2)
+    return ClonePairInfo(doc1: doc1, doc2: doc2, similarity: similarity)
+  }
 
-        guard similarity >= minimumSimilarity else { return nil }
+  // MARK: Private
 
-        return ClonePairInfo(doc1: doc1, doc2: doc2, similarity: similarity)
+  /// Sequential verification for small batches or as chunk processor.
+  private func verifySequential(
+    _ pairs: [DocumentPair],
+    documentMap: [Int: ShingledDocument]
+  ) async -> [ClonePairInfo] {
+    var results: [ClonePairInfo] = []
+    var processedPairs = 0
+
+    for pair in pairs {
+      if let verified = verifyPair(pair, documentMap: documentMap) {
+        results.append(verified)
+      }
+
+      processedPairs += 1
+      if await TaskCooperation.checkpoint(iteration: processedPairs) {
+        break
+      }
     }
 
-    // MARK: Private
-
-    /// Sequential verification for small batches or as chunk processor.
-    private func verifySequential(
-        _ pairs: [DocumentPair],
-        documentMap: [Int: ShingledDocument]
-    ) async -> [ClonePairInfo] {
-        var results: [ClonePairInfo] = []
-        var processedPairs = 0
-
-        for pair in pairs {
-            if let verified = verifyPair(pair, documentMap: documentMap) {
-                results.append(verified)
-            }
-
-            processedPairs += 1
-            if await TaskCooperation.checkpoint(iteration: processedPairs) {
-                break
-            }
-        }
-
-        return results
-    }
+    return results
+  }
 }
