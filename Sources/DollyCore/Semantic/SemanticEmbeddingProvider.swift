@@ -22,6 +22,11 @@ protocol SemanticEmbeddingProvider: Sendable {
   /// dimension equality before computing similarity.
   var embeddingDimension: Int { get }
 
+  /// Human-readable identity of the model actually running, surfaced in the
+  /// semantic-pass status note so a run makes clear whether it used a bundled
+  /// code model or the zero-download on-device default.
+  var providerName: String { get }
+
   /// Embed a code snippet into a dense vector. Throws if the snippet
   /// exceeds the provider's context window or the model fails to load.
   func embed(snippet: String) async throws -> [Float]
@@ -33,6 +38,8 @@ protocol SemanticEmbeddingProvider: Sendable {
 }
 
 extension SemanticEmbeddingProvider {
+  var providerName: String { "embedding" }
+
   func embed(snippets: [String]) async throws -> [[Float]] {
     var results: [[Float]] = []
     results.reserveCapacity(snippets.count)
