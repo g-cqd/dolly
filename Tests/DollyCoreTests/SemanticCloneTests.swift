@@ -145,9 +145,77 @@ private enum SemanticCorpus {
   }
 #endif
 
-// MARK: - HF / Core ML bundle provider (local-only, models gitignored)
+// MARK: - Bundled-model auto-discovery (the `dolly-full` build)
 
 #if canImport(CoreML)
+  /// Pins the executable-adjacent model discovery that lets the `dolly-full`
+  /// release run `--semantic` with no flag. Exercises the pure candidate search
+  /// (no process globals, no CoreML load — dummy `.mlmodelc` directories), the
+  /// path the release workflow depends on but nothing else would cover until a
+  /// tag is cut.
+  @Suite struct BundledModelDiscoveryTests {
+    /// A throwaway tree with an optional model dir at each interesting location.
+    /// Returns the root; caller removes it.
+    private static func stage(
+      adjacentModel: Bool = false, shareModel: Bool = false, overrideModel: Bool = false
+    ) throws -> (root: URL, execDir: URL, overrideDir: URL) {
+      let fm = FileManager.default
+      let root = fm.temporaryDirectory.appending(path: "dolly-discovery-\(UUID().uuidString)")
+      let execDir = root.appending(path: "bin")
+      let overrideDir = root.appending(path: "custom")
+      try fm.createDirectory(at: execDir, withIntermediateDirectories: true)
+      func plantModel(in dir: URL) throws {
+        try fm.createDirectory(
+          at: dir.appending(path: "Model.mlmodelc"), withIntermediateDirectories: true)
+      }
+      if adjacentModel { try plantModel(in: execDir.appending(path: "Models/MiniLM")) }
+      if shareModel { try plantModel(in: root.appending(path: "share/dolly/Models/MiniLM")) }
+      if overrideModel { try plantModel(in: overrideDir) }
+      return (root, execDir, overrideDir)
+    }
+
+    @Test("Discovers a model in Models/MiniLM next to the executable")
+    func findsAdjacentModel() throws {
+      let (root, execDir, _) = try Self.stage(adjacentModel: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let found = SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: nil)
+      #expect(
+        found?.resolvingSymlinksInPath().path
+          == execDir.appending(path: "Models/MiniLM").resolvingSymlinksInPath().path)
+    }
+
+    @Test("Falls back to the FHS-style share/dolly layout")
+    func findsShareLayoutModel() throws {
+      let (root, execDir, _) = try Self.stage(shareModel: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let found = SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: nil)
+      let expected = root.appending(path: "share/dolly/Models/MiniLM").resolvingSymlinksInPath()
+        .path
+      #expect(found?.resolvingSymlinksInPath().path == expected)
+    }
+
+    @Test("DOLLY_EMBEDDING_BUNDLE override wins over an adjacent model")
+    func overrideTakesPrecedence() throws {
+      let (root, execDir, overrideDir) = try Self.stage(adjacentModel: true, overrideModel: true)
+      defer { try? FileManager.default.removeItem(at: root) }
+      let found = SemanticDiscovery.bundledModelDirectory(
+        executableDir: execDir, override: overrideDir.path)
+      #expect(found?.resolvingSymlinksInPath().path == overrideDir.resolvingSymlinksInPath().path)
+    }
+
+    @Test("No model anywhere returns nil (the plain dolly binary)")
+    func noModelReturnsNil() throws {
+      let (root, execDir, _) = try Self.stage()
+      defer { try? FileManager.default.removeItem(at: root) }
+      #expect(SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: nil) == nil)
+      // An override pointing at a model-free directory is also nil, not a crash.
+      #expect(
+        SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: root.path) == nil)
+    }
+  }
+
+  // MARK: - HF / Core ML bundle provider (local-only, models gitignored)
+
   @Suite struct SemanticCloneBundleTests {
     /// A code-trained MiniLM Core ML + tokenizer bundle, present only on the
     /// author's machine (models are gitignored). Absent in CI → the test skips.

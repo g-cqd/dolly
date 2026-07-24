@@ -84,6 +84,49 @@ jobs:
           cp "$BIN" LICENSE README.md "$NAME/"
           tar -czf "$NAME.tar.gz" "$NAME"
           shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+      - name: Bundle dolly-full (binary + MiniLM embedding model)
+        # Best-effort: a model-fetch hiccup must never drop the plain macOS
+        # artifact packaged above (this step is continue-on-error, so its
+        # failure leaves the plain binary to ship). Ships all-MiniLM-L6-v2
+        # (Apache-2.0), converted to Core ML, at Models/MiniLM so
+        # `dolly --semantic` uses a real embedding model out of the box —
+        # auto-discovered next to the executable, no flag required.
+        timeout-minutes: 10
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BIN="$(swift build -c release --show-bin-path)/dolly"
+          VERSION="$("$BIN" --version)"
+          gh release download embedding-models-v1 --repo "$GITHUB_REPOSITORY" \
+            --pattern 'dolly-minilm.tar.gz' --pattern 'dolly-minilm.tar.gz.sha256' --clobber
+          EXPECTED="$(cut -d' ' -f1 dolly-minilm.tar.gz.sha256)"
+          ACTUAL="$(shasum -a 256 dolly-minilm.tar.gz | cut -d' ' -f1)"
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "::error::MiniLM checksum mismatch (expected $EXPECTED, got $ACTUAL)"
+            exit 1
+          fi
+          NAME="dolly-full-$VERSION-macos-arm64"
+          mkdir -p "$NAME/Models"
+          cp "$BIN" LICENSE README.md "$NAME/"
+          tar -xzf dolly-minilm.tar.gz -C "$NAME/Models"   # -> Models/MiniLM/...
+          printf '%s\n' \
+            '# Bundled model' \
+            '' \
+            'This archive bundles all-MiniLM-L6-v2 (Models/MiniLM), a sentence-embedding' \
+            'model by the Sentence-Transformers authors, converted to Core ML.' \
+            '' \
+            'Licensed under the Apache License 2.0.' \
+            'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2' \
+            '' \
+            'dolly loads it automatically for --semantic when it sits next to the' \
+            'executable. Delete Models/ to fall back to the on-device NLContextual' \
+            'provider, or override with --embedding-bundle / DOLLY_EMBEDDING_BUNDLE.' \
+            > "$NAME/THIRD_PARTY_NOTICES.md"
+          tar -czf "$NAME.tar.gz" "$NAME"
+          shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+          ls -lh "$NAME.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos
