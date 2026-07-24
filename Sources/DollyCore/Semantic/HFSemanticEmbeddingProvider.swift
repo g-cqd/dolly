@@ -22,6 +22,7 @@
 
   final class HFSemanticEmbeddingProvider: SemanticEmbeddingProvider, @unchecked Sendable {
     let embeddingDimension: Int
+    let providerName: String
 
     /// - Parameters:
     ///   - bundleDir: directory holding both the Core ML bundle and the HF
@@ -43,6 +44,7 @@
       positionIDsName: String? = "position_ids",
       lastHiddenStateName: String = "last_hidden_state"
     ) async throws {
+      self.providerName = "bundle:\(bundleDir.lastPathComponent)"
       let resolvedModelURL: URL
       if let modelURL {
         resolvedModelURL = modelURL
