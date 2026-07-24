@@ -248,6 +248,23 @@ let benchmarks: @Sendable () -> Void = {
     }
   }
 
+  #if canImport(NaturalLanguage)
+    // Opt-in semantic pass over the same corpus via the on-device
+    // NLContextualEmbedding provider (zero download). Local-only and macOS-
+    // only; records the added cost of snippet embedding + ANN discovery on
+    // top of the structural pass. Embedding dominates, so iterations are few
+    // and the duration cap is generous.
+    Benchmark(
+      "end-to-end analyze --semantic (NLContextual)",
+      configuration: .init(
+        metrics: [.wallClock, .mallocCountTotal], maxDuration: .seconds(120), maxIterations: 3)
+    ) { benchmark in
+      for _ in benchmark.scaledIterations {
+        blackHole(await Analyzer(semantic: SemanticOptions()).analyze(files: paths))
+      }
+    }
+  #endif
+
   Benchmark(
     "extraction stage",
     configuration: .init(
