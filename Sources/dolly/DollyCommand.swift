@@ -67,6 +67,14 @@ struct Analyze: AsyncParsableCommand {
     help: ArgumentHelp("Threshold preset for --semantic: balanced (default), strict, or loose."))
   var embeddingPreset: SemanticPreset = .balanced
 
+  @Option(
+    name: .customLong("semantic-max-group"),
+    help: ArgumentHelp(
+      "Drop any --semantic clone group larger than this many members (default 25). Huge groups "
+        + "are the embedding-collapse pathology of the zero-download NLContextual model, not real "
+        + "clone families. Set 0 to disable the cap."))
+  var semanticMaxGroup: Int = 25
+
   func run() async throws {
     let configuration = try loadConfiguration()
     let files = try discoverSwiftFiles(configuration: configuration)
@@ -77,7 +85,10 @@ struct Analyze: AsyncParsableCommand {
       ? nil
       : cachePath.map { URL(fileURLWithPath: $0) } ?? Analyzer.defaultCacheURL()
     let semanticOptions: SemanticOptions? =
-      semantic ? SemanticOptions(bundlePath: embeddingBundle, preset: embeddingPreset) : nil
+      semantic
+      ? SemanticOptions(
+        bundlePath: embeddingBundle, preset: embeddingPreset, maxGroupSize: semanticMaxGroup)
+      : nil
     var report = await Analyzer(
       configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions
     ).analyze(files: files)
