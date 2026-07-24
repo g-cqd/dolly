@@ -83,9 +83,13 @@ dolly analyze --semantic --semantic-max-group 25 .     # cap group size (default
   group). The cap only ever removes oversized groups, so tight code-trained
   bundles (typical max ~5 members) are unaffected; `0` disables it.
 - **Higher recall — bring a bundle.** `--embedding-bundle <dir>` points at a
-  directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus a
-  HuggingFace tokenizer (`tokenizer.json`, …) — e.g. a CodeBERT/GraphCodeBERT/
-  MiniLM export. Code-trained bundles catch clones the NL model can't.
+  directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus its
+  WordPiece vocabulary (`vocab.txt`, or the vocab inside `tokenizer.json`) — e.g.
+  an all-MiniLM-L6-v2 export. Such bundles catch clones the NL model can't.
+  **Tokenizer support is WordPiece (BERT-family) only**: dolly tokenizes in-house
+  rather than linking `swift-transformers`, so BPE/SentencePiece bundles
+  (CodeBERT, GraphCodeBERT, jina-v2-code, CodeT5+) fail to load and fall back to
+  the default provider rather than tokenizing wrongly.
 - **Batteries included — the `dolly-full` build.** The
   `dolly-full-<version>-macos-arm64` release archive ships an all-MiniLM-L6-v2
   (Apache-2.0) Core ML bundle at `Models/` next to the binary. dolly discovers
@@ -178,9 +182,12 @@ dolly analyze --semantic --embedding-bundle Models/MiniLM \
               --embedding-preset strict --semantic-max-group 25 Sources
 ```
 
-- **Prefer a code bundle.** `--embedding-bundle <CodeBERT/MiniLM dir>` is the
-  path to real precision on source: code-trained embeddings stay tight (small,
-  meaningful groups). This is what to use when you actually want Type-4 results.
+- **Prefer a bundle over the NL default.** `--embedding-bundle <MiniLM dir>` (or
+  just the `dolly-full` build, which finds it automatically) is the path to real
+  precision on source: it stays tight — small, meaningful groups — where the NL
+  model smears. This is what to use when you actually want Type-4 results.
+  Measured on a 156-file corpus: MiniLM ran **4.6× faster** than NLContextual
+  (18.3 s vs 84.5 s) and produced tighter groups (275 vs 328 findings).
 - **The zero-download NLContextual default is convenient but limited.** It is an
   English natural-language model, not code-trained, so on large homogeneous
   codebases it *over-clusters* (measured: a single 272-member group before the
@@ -234,8 +241,9 @@ without a wall of noise.
   an opt-in `--semantic` (NLContextual) benchmark.
 - The semantic module is macOS-only and gated behind `canImport(CoreML)` /
   `canImport(NaturalLanguage)`; on Linux the embedding providers compile out
-  and detection is token-only. The `swift-transformers` dependency links its
-  `Tokenizers` product on macOS only, so Linux resolution/build is unaffected.
+  and detection is token-only. Tokenization is built in (`WordPieceTokenizer`,
+  pinned token-for-token against `swift-transformers` before that dependency was
+  dropped), so the package resolves to swift-syntax + swift-argument-parser only.
 - Implementation policy: warnings as errors, strict memory safety (the
   one `unsafe` fingerprint fast path is isolated and invariant-commented),
   Swift concurrency only (no GCD), swift-format gated.
