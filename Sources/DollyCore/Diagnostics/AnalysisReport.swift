@@ -11,6 +11,11 @@ public struct AnalysisReport: Sendable, Codable {
   /// cache was configured).
   public var cacheHits = 0
   public var cacheMisses = 0
+  /// Status of the opt-in `--semantic` pass: nil when it wasn't requested, an
+  /// informational summary when it ran, or a graceful-fallback reason when a
+  /// provider wasn't available (macOS-only capability). Optional, so default
+  /// runs omit it from JSON entirely.
+  public var semanticNote: String?
 
   public init(
     findings: [Finding] = [],
