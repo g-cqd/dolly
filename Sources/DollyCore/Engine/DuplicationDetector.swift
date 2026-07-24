@@ -19,6 +19,12 @@ enum CloneType: String, Sendable, Codable, CaseIterable {
   /// Structural clones - similar token shingles above the similarity
   /// threshold without being line-for-line copies (Type-3).
   case structural
+
+  /// Semantic clones - behaviorally equivalent regions in different
+  /// token shapes (Type-4). Never produced by the token/suffix-array
+  /// engine; surfaced only by the opt-in embedding pass (`--semantic`),
+  /// which is macOS-only.
+  case semantic
 }
 
 // MARK: - Clone
