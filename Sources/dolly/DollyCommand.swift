@@ -14,6 +14,7 @@ struct DollyCommand: AsyncParsableCommand {
 }
 
 extension OutputFormat: ExpressibleByArgument {}
+extension SemanticPreset: ExpressibleByArgument {}
 
 struct Analyze: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -46,6 +47,26 @@ struct Analyze: AsyncParsableCommand {
     help: "Facts cache file (default: the user caches directory, dolly/facts.json).")
   var cachePath: String?
 
+  @Flag(
+    name: .long,
+    help: ArgumentHelp(
+      "Semantic (Type-4) clone detection: embed function snippets and report idiom-level clones "
+        + "the token detectors miss. Opt-in and macOS-only (CoreML/NaturalLanguage); degrades to "
+        + "structural-only elsewhere."))
+  var semantic = false
+
+  @Option(
+    name: .customLong("embedding-bundle"),
+    help: ArgumentHelp(
+      "Directory with a HuggingFace tokenizer + Core ML model to use for --semantic (higher "
+        + "recall). Default: Apple's on-device NLContextualEmbedding (zero download, macOS 14+)."))
+  var embeddingBundle: String?
+
+  @Option(
+    name: .customLong("embedding-preset"),
+    help: ArgumentHelp("Threshold preset for --semantic: balanced (default), strict, or loose."))
+  var embeddingPreset: SemanticPreset = .balanced
+
   func run() async throws {
     let configuration = try loadConfiguration()
     let files = try discoverSwiftFiles(configuration: configuration)
@@ -55,8 +76,17 @@ struct Analyze: AsyncParsableCommand {
       noCache
       ? nil
       : cachePath.map { URL(fileURLWithPath: $0) } ?? Analyzer.defaultCacheURL()
-    var report = await Analyzer(configuration: configuration, cacheURL: cacheURL)
-      .analyze(files: files)
+    let semanticOptions: SemanticOptions? =
+      semantic ? SemanticOptions(bundlePath: embeddingBundle, preset: embeddingPreset) : nil
+    var report = await Analyzer(
+      configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions
+    ).analyze(files: files)
+
+    // Semantic-pass status / graceful-fallback note goes to stderr so stdout
+    // stays machine-parseable.
+    if let note = report.semanticNote {
+      FileHandle.standardError.write(Data((ToolInfo.name + ": " + note + "\n").utf8))
+    }
 
     if let writeBaseline {
       try Baseline(findings: report.findings).write(path: writeBaseline)
