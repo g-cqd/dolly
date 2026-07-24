@@ -99,10 +99,15 @@ jobs:
           set -euo pipefail
           BIN="$(swift build -c release --show-bin-path)/dolly"
           VERSION="$("$BIN" --version)"
+          # Fetch into a subdir, NOT the workspace root: the upload-artifact glob
+          # `dolly-*.tar.gz` would otherwise sweep `dolly-minilm.tar.gz` (the raw
+          # model input) up as a stray release asset.
+          mkdir -p _model
           gh release download embedding-models-v1 --repo "$GITHUB_REPOSITORY" \
-            --pattern 'dolly-minilm.tar.gz' --pattern 'dolly-minilm.tar.gz.sha256' --clobber
-          EXPECTED="$(cut -d' ' -f1 dolly-minilm.tar.gz.sha256)"
-          ACTUAL="$(shasum -a 256 dolly-minilm.tar.gz | cut -d' ' -f1)"
+            --pattern 'dolly-minilm.tar.gz' --pattern 'dolly-minilm.tar.gz.sha256' \
+            --dir _model --clobber
+          EXPECTED="$(cut -d' ' -f1 _model/dolly-minilm.tar.gz.sha256)"
+          ACTUAL="$(shasum -a 256 _model/dolly-minilm.tar.gz | cut -d' ' -f1)"
           if [ "$EXPECTED" != "$ACTUAL" ]; then
             echo "::error::MiniLM checksum mismatch (expected $EXPECTED, got $ACTUAL)"
             exit 1
@@ -110,7 +115,7 @@ jobs:
           NAME="dolly-full-$VERSION-macos-arm64"
           mkdir -p "$NAME/Models"
           cp "$BIN" LICENSE README.md "$NAME/"
-          tar -xzf dolly-minilm.tar.gz -C "$NAME/Models"   # -> Models/MiniLM/...
+          tar -xzf _model/dolly-minilm.tar.gz -C "$NAME/Models"   # -> Models/MiniLM/...
           printf '%s\n' \
             '# Bundled model' \
             '' \
