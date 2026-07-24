@@ -137,6 +137,44 @@ import Testing
     #expect(groups.isEmpty, "same-file overlapping ranges must not pair with themselves")
   }
 
+  @Test("Group-size cap drops embedding-collapse mega-groups, keeps small families")
+  func groupSizeCap() async throws {
+    // 30 snippets of the same shape across 30 files fuse into one large
+    // connected component — the deterministic stand-in for the NLContextual
+    // "cone collapse" that produced 272- and 410-member mega-groups.
+    let code = "func score(_ values: [Int]) -> Int { values.reduce(0, +) &* 7 }"
+    let many = (0..<30).map { snippet("F\($0).swift", code) }
+    let provider = DeterministicEmbeddingProvider(dimension: 128)
+
+    // Uncapped (maxGroupSize 0): the whole component survives as one group
+    // whose membership is well past any sane cap.
+    let uncapped = try await EmbeddingCloneDiscovery().discover(
+      snippets: many, provider: provider, k: 40,
+      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 0)
+    #expect(uncapped.count == 1)
+    #expect((uncapped.first?.clones.count ?? 0) > 25)
+
+    // Capped at 25: that oversized group is dropped wholesale as noise.
+    let capped = try await EmbeddingCloneDiscovery().discover(
+      snippets: many, provider: provider, k: 40,
+      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 25)
+    #expect(capped.isEmpty, "a group past the cap is dropped as embedding-collapse noise")
+
+    // A legitimate small family (3 members — the shape a tight, code-trained
+    // bundle model produces) sits well under the cap and survives untouched.
+    let few = (0..<3).map { snippet("G\($0).swift", code) }
+    let small = try await EmbeddingCloneDiscovery().discover(
+      snippets: few, provider: provider, k: 5,
+      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 25)
+    #expect(small.count == 1)
+    #expect(small.first?.clones.count == 3)
+  }
+
+  @Test("Default SemanticOptions cap is 25")
+  func defaultCapIsTwentyFive() {
+    #expect(SemanticOptions().maxGroupSize == 25)
+  }
+
   // MARK: - SemanticPreset
 
   @Test("Balanced preset is cosine 0.85 / Jaccard 0.20")

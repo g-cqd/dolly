@@ -32,17 +32,29 @@ public struct SemanticOptions: Sendable {
   public var maxLength: Int
   /// Top-k neighbors per HNSW query.
   public var k: Int
+  /// Hard ceiling on semantic-clone group membership. A group larger than
+  /// this is dropped, not reported, because a group that big is the
+  /// embedding-collapse pathology — an English-trained model (the zero-download
+  /// NLContextual default) maps many small, structurally-plain declarations
+  /// into one narrow cone of the vector space, so hundreds of unrelated
+  /// snippets become mutually "similar" and union-find fuses them into one
+  /// meaningless mega-group. Real clone families are small (a handful of
+  /// members); code-trained bundle models already stay tight, so the cap is a
+  /// no-op for them. `<= 0` disables the cap.
+  public var maxGroupSize: Int
 
   public init(
     bundlePath: String? = nil,
     preset: SemanticPreset = .balanced,
     maxLength: Int = 128,
-    k: Int = 10
+    k: Int = 10,
+    maxGroupSize: Int = 25
   ) {
     self.bundlePath = bundlePath
     self.preset = preset
     self.maxLength = maxLength
     self.k = k
+    self.maxGroupSize = maxGroupSize
   }
 }
 
@@ -119,7 +131,8 @@ enum SemanticDiscovery {
       provider: provider,
       k: options.k,
       similarityThreshold: thresholds.cosine,
-      minTokenOverlap: thresholds.jaccard
+      minTokenOverlap: thresholds.jaccard,
+      maxGroupSize: options.maxGroupSize
     )
   }
 }

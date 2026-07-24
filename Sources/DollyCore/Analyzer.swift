@@ -221,9 +221,11 @@ public struct Analyzer: Sendable {
       do {
         let groups = try await SemanticDiscovery.discover(
           snippets: snippets, provider: provider, options: options)
+        let capLabel = options.maxGroupSize > 0 ? "\(options.maxGroupSize)/group" : "off"
         report.semanticNote =
           "semantic: embedded \(snippets.count) snippet(s), "
-          + "\(groups.count) candidate group(s) before precedence filtering"
+          + "\(groups.count) candidate group(s) before precedence filtering "
+          + "(group-size cap \(capLabel))"
         return groups
       } catch {
         report.semanticNote = "semantic: embedding discovery failed (\(error)); structural only"
