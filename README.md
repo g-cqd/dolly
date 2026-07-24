@@ -64,6 +64,7 @@ groups the token/structural stages did not already claim.
 dolly analyze --semantic Sources                       # NLContextual (default)
 dolly analyze --semantic --embedding-preset strict .   # tighter thresholds
 dolly analyze --semantic --embedding-bundle Models/MiniLM Sources
+dolly analyze --semantic --semantic-max-group 25 .     # cap group size (default)
 ```
 
 - **Default provider — zero download.** With just `--semantic`, dolly uses
@@ -75,6 +76,12 @@ dolly analyze --semantic --embedding-bundle Models/MiniLM Sources
   *over-cluster* (many similar-looking visitor/handler methods collapse into
   one big group) — prefer `--embedding-bundle` or `--embedding-preset strict`
   there.
+- **Group-size cap.** A semantic group larger than `--semantic-max-group`
+  (default 25) is dropped as noise: a group that big is the embedding-collapse
+  pathology, not a clone family (the NL model fuses hundreds of plain
+  declarations into one cone — measured on a 330-file corpus, a 272-member
+  group). The cap only ever removes oversized groups, so tight code-trained
+  bundles (typical max ~5 members) are unaffected; `0` disables it.
 - **Higher recall — bring a bundle.** `--embedding-bundle <dir>` points at a
   directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus a
   HuggingFace tokenizer (`tokenizer.json`, …) — e.g. a CodeBERT/GraphCodeBERT/
@@ -119,6 +126,76 @@ findings can never go stale relative to engine or configuration changes.
 
 Unknown rule ids fail closed. `minimumTokens` (1...10000) is the clone
 floor; `minimumSimilarity` (0...1) gates near/structural similarity.
+
+## Recommended configuration for real-world use
+
+Guidance below is calibrated against a real 330-file Swift server codebase
+(HTTP/1–3, TLS, HPACK/QPACK, epoll/kqueue/SwiftSystem transports).
+
+### Default (token clones) — your CI gate
+
+```sh
+dolly analyze --strict Sources        # exact + near + structural, fail on any finding
+```
+
+- **Fast enough to gate every push.** The default token pass (exact + near +
+  structural, one shared suffix-array build) runs in ~0.1 s on those 330 files
+  (release) — sub-second, deterministic, no model, no network. This is the
+  configuration to wire into CI.
+- **`exact` / `near` are the high-signal rules.** They fire on genuinely shared
+  helpers, copy-paste, and *parallel backend* families — e.g. `epoll` ↔ `kqueue`
+  ↔ SwiftSystem connection bodies, or HTTP/2 ↔ HTTP/3 frame handling. Those are
+  *true* clones but usually *intentional and idiomatic*: two backends kept in
+  lockstep on purpose. **Review them; don't auto-fail on them.** Treat a new
+  `exact`/`near` finding as "did I mean to duplicate this?", and accept the
+  standing ones (below) so the gate stays about *new* duplication.
+- **`structural` (Type-3)** catches near-copies with edited statements — real
+  drift between things that were once identical. High value, slightly noisier
+  than exact/near; keep it on, tune `minimumSimilarity` up if a codebase is
+  boilerplate-heavy.
+- **Least useful when** a codebase legitimately contains many small, near-
+  identical value types or generated files — exclude generated code with
+  `exclude` and accept intentional parallel backends rather than lowering the
+  token floor (a low `minimumTokens` turns ordinary boilerplate into noise).
+
+### `--semantic` (Type-4) — targeted, not CI
+
+```sh
+# Best precision on code: a code-trained bundle, tight preset, capped groups.
+dolly analyze --semantic --embedding-bundle Models/MiniLM \
+              --embedding-preset strict --semantic-max-group 25 Sources
+```
+
+- **Prefer a code bundle.** `--embedding-bundle <CodeBERT/MiniLM dir>` is the
+  path to real precision on source: code-trained embeddings stay tight (small,
+  meaningful groups). This is what to use when you actually want Type-4 results.
+- **The zero-download NLContextual default is convenient but limited.** It is an
+  English natural-language model, not code-trained, so on large homogeneous
+  codebases it *over-clusters* (measured: a single 272-member group before the
+  cap) and it is **orders of magnitude slower** — ~90 s vs ~0.1 s for the token
+  default on the same 330 files (one on-device inference per snippet). Reserve
+  it for small or quick scans, and **always keep the group-size cap on**
+  (default `--semantic-max-group 25`).
+- **What semantic is uniquely good at:** token-*invisible* idiom clones — two
+  implementations that compute the same thing through different shapes, which
+  `exact`/`near`/`structural` cannot see by construction (e.g. a TLS
+  `SecurityChainValidator` ↔ `BoringSSLChainValidator` pair that validate the
+  same chain via different platform APIs). **Least useful:** as a CI gate — it
+  is slow, provider-dependent, and (on the NL model) precision-limited. Run it
+  ad hoc when hunting for behavioral duplication, review the groups by hand.
+
+### Accept intentional duplication, don't suppress the rule
+
+Parallel backends and generated code are *meant* to be duplicated. Rather than
+disabling `exact`/`near` globally (which would hide unintended copy-paste too),
+accept each intentional instance at the source with a reason:
+
+```swift
+// @dl:accept -- epoll/kqueue transports are kept byte-for-byte parallel on purpose
+```
+
+or take a one-time baseline (`--write-baseline`) of the standing duplication so
+CI only flags *new* findings. Keep the rule on; accept the instances.
 
 ## Accepting a finding
 
