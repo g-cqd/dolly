@@ -56,10 +56,16 @@ project.
 ## Semantic (Type-4) clones
 
 Same behavior under a different token shape (loop vs filter/map/reduce,
-recursion vs iteration) is invisible to a token-based engine. Out of
-scope.
+recursion vs iteration) is invisible to the token-based engine, which is
+why the DEFAULT analysis misses it — the pin below characterizes that
+default miss. Since 0.3.0 the opt-in `--semantic` pass (macOS-only,
+CoreML / NaturalLanguage; off by default) recovers a portion of these via
+embedding similarity under the `semantic-clone` rule; recall depends on
+the provider (the default NLContextual English model is weaker than a
+code-trained `--embedding-bundle`). The token engine itself is unchanged.
 
-- Pinned by: `KnownGapsTests.semanticClonesAreMissed`
+- Pinned by: `KnownGapsTests.semanticClonesAreMissed` (default, semantic off)
+- Counterpart that works: `SemanticCloneTests` (opt-in `--semantic`, macOS)
 
 ## Macro-expansion sources
 

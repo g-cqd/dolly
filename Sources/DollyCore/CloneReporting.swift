@@ -7,10 +7,13 @@
 
 enum CloneReporting {
   /// Precedence order between clone types: an exact clone is also a near
-  /// clone, and both trip the structural detector. Reporting all three
-  /// for the same region would triple the noise, so lower-precedence
-  /// groups fully covered by higher-precedence claims are dropped.
-  private static let precedence: [CloneType] = [.exact, .near, .structural]
+  /// clone, and both trip the structural detector; a semantic (Type-4)
+  /// group that overlaps a region the token detectors already claimed is
+  /// redundant. Reporting the same region under several rules would
+  /// multiply the noise, so lower-precedence groups fully covered by
+  /// higher-precedence claims are dropped. Semantic sits last so it only
+  /// ever surfaces regions the token/structural stages did not report.
+  private static let precedence: [CloneType] = [.exact, .near, .structural, .semantic]
 
   /// A member counts as covered when at least this fraction of its lines
   /// is claimed by higher-precedence groups.
@@ -21,6 +24,7 @@ enum CloneReporting {
     case .exact: .exactClone
     case .near: .nearClone
     case .structural: .structuralClone
+    case .semantic: .semanticClone
     }
   }
 
@@ -29,6 +33,7 @@ enum CloneReporting {
     case .exactClone: .exact
     case .nearClone: .near
     case .structuralClone: .structural
+    case .semanticClone: .semantic
     }
   }
 
@@ -44,14 +49,20 @@ enum CloneReporting {
       let others = members.dropFirst()
         .map { "\($0.file):\($0.startLine)" }
         .joined(separator: ", ")
+      // Semantic groups are matched by embedding, not by a shared token
+      // run, so "duplicated regions of ~N tokens" would misdescribe them;
+      // every other rule keeps its v0.2.0 wording verbatim.
+      let message =
+        group.type == .semantic
+        ? "\(members.count) semantically similar regions (idiom-level, cosine \(similarity))"
+        : "\(members.count) duplicated regions of ~\(tokens) tokens (similarity \(similarity))"
       return Finding(
         rule: rule,
         severity: configuration.severity(for: rule),
         path: anchor.file,
         line: anchor.startLine,
         column: anchor.startColumn,
-        message:
-          "\(members.count) duplicated regions of ~\(tokens) tokens (similarity \(similarity))",
+        message: message,
         note: "duplicates: \(others)",
         related: members.dropFirst().map {
           RelatedLocation(path: $0.file, line: $0.startLine, column: $0.startColumn)
