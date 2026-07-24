@@ -114,30 +114,49 @@ enum SAIS {
     // in-place reset.
     var sa = [Int](repeating: -1, count: n)
 
+    // First induction: LMS suffixes placed in text order. This sorts the
+    // LMS *substrings* well enough to name them, but it does NOT sort the
+    // full suffixes — the second induction below (LMS in true sorted order)
+    // is what yields the final suffix array and must ALWAYS run.
     placeAndInduce(
       into: &sa, text: text, types: types, lmsPositions: lmsPositions,
       orderedBy: nil, bucketHeads: bucketHeads, bucketTails: bucketTails)
 
-    // Assign names to LMS substrings
+    // Assign names to the sorted LMS substrings, then form the reduced
+    // string (one name per LMS position, in text order).
     let (lmsNames, name) = assignLMSNames(sa: sa, text: text, types: types)
-
-    // If not all LMS substrings have unique names, recursively sort
+    let reducedString = buildReducedString(lmsNames: lmsNames)
     let lmsCount = lmsPositions.count
+
+    // `reducedSA[r]` = index into `lmsPositions` of the r-th smallest LMS
+    // suffix — i.e. the suffix array of the reduced string.
+    let reducedSA: [Int]
     if name + 1 < lmsCount {
-      let reducedString = buildReducedString(lmsNames: lmsNames)
-      let reducedSA: [Int]
+      // Duplicate names: the LMS-substring order is ambiguous, so recurse on
+      // the reduced string to resolve the true LMS-suffix order.
       if reducedString.count <= 32 {
         reducedSA = buildSimple(reducedString)
       } else {
         reducedSA = build(reducedString, alphabetSize: name + 1)
       }
-
-      // Reset SA in place (no fresh allocation).
-      for index in 0..<n { sa[index] = -1 }
-      placeAndInduce(
-        into: &sa, text: text, types: types, lmsPositions: lmsPositions,
-        orderedBy: reducedSA, bucketHeads: bucketHeads, bucketTails: bucketTails)
+    } else {
+      // Every LMS substring is unique, so the LMS suffixes sort exactly by
+      // name. `reducedSA` is then the inverse of the (bijective) name
+      // permutation: no recursion needed, but the second induction below
+      // still MUST run to place the L/S suffixes around the sorted LMS set.
+      var inverse = [Int](repeating: 0, count: reducedString.count)
+      for (position, assignedName) in reducedString.enumerated() {
+        inverse[assignedName] = position
+      }
+      reducedSA = inverse
     }
+
+    // Second induction: LMS suffixes placed at bucket tails in their true
+    // sorted order, then L- and S-type suffixes induced around them.
+    for index in 0..<n { sa[index] = -1 }
+    placeAndInduce(
+      into: &sa, text: text, types: types, lmsPositions: lmsPositions,
+      orderedBy: reducedSA, bucketHeads: bucketHeads, bucketTails: bucketTails)
 
     return sa
   }
