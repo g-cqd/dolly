@@ -1,5 +1,4 @@
 public import Foundation
-
 import SwiftParser
 import SwiftSyntax
 
@@ -20,9 +19,18 @@ public struct Analyzer: Sendable {
   /// Facts-cache location; nil disables caching entirely.
   public let cacheURL: URL?
 
-  public init(configuration: Configuration = .default, cacheURL: URL? = nil) {
+  /// Opt-in semantic (Type-4) pass options; nil (the default) means the pass
+  /// is off and analysis is byte-identical to the structural-only default.
+  public let semantic: SemanticOptions?
+
+  public init(
+    configuration: Configuration = .default,
+    cacheURL: URL? = nil,
+    semantic: SemanticOptions? = nil
+  ) {
     self.configuration = configuration
     self.cacheURL = cacheURL
+    self.semantic = semantic
   }
 
   /// The platform cache default: `~/Library/Caches/dolly/facts.json` on
@@ -147,26 +155,39 @@ public struct Analyzer: Sendable {
   /// Run the duplication engine across the corpus and partition results
   /// into findings and suppressed findings.
   private func runEngine(over prepared: [PreparedFile], into report: inout AnalysisReport) async {
+    guard !prepared.isEmpty else { return }
     // The token/suffix-array engine handles exact/near/structural; the
-    // semantic (Type-4) type is produced only by the opt-in embedding pass
-    // (wired in `runSemanticDiscovery`), never by this detector, so it is
-    // excluded from the engine's requested types.
+    // semantic (Type-4) type is produced only by the opt-in embedding pass,
+    // never by this detector, so it is excluded from the engine's requested
+    // types.
     let structuralTypes = Set(
       RuleID.allCases.filter(configuration.isEnabled).map(CloneReporting.cloneType(for:))
     ).subtracting([.semantic])
-    guard !structuralTypes.isEmpty, !prepared.isEmpty else { return }
+    let semanticActive = semantic != nil && configuration.isEnabled(.semanticClone)
+    guard !structuralTypes.isEmpty || semanticActive else { return }
 
-    let detector = DuplicationDetector(
-      configuration: DuplicationConfiguration(
-        minimumTokens: configuration.duplication?.minimumTokens ?? 50,
-        cloneTypes: structuralTypes,
-        minimumSimilarity: configuration.duplication?.minimumSimilarity ?? 0.8
+    var groups: [CloneGroup] = []
+    if !structuralTypes.isEmpty {
+      let detector = DuplicationDetector(
+        configuration: DuplicationConfiguration(
+          minimumTokens: configuration.duplication?.minimumTokens ?? 50,
+          cloneTypes: structuralTypes,
+          minimumSimilarity: configuration.duplication?.minimumSimilarity ?? 0.8
+        )
       )
-    )
-    let corpus = CorpusAssembler.assemble(files: prepared.map(\.tokens))
-    let groups = await detector.detectClones(in: corpus)
-    let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
+      let corpus = CorpusAssembler.assemble(files: prepared.map(\.tokens))
+      groups = await detector.detectClones(in: corpus)
+    }
 
+    // Semantic pass runs after the structural pass; CloneReporting's
+    // precedence filter (semantic sits last) drops any semantic group the
+    // token detectors already reported.
+    if semanticActive, let semantic {
+      groups.append(
+        contentsOf: await runSemanticPass(over: prepared, options: semantic, into: &report))
+    }
+
+    let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
     for finding in CloneReporting.findings(from: groups, configuration: configuration) {
       // A finding is suppressed when the anchor file's directives
       // cover the anchor line.
@@ -174,6 +195,39 @@ public struct Analyzer: Sendable {
         report.suppressed.append(.init(finding: finding, reason: reason))
       } else {
         report.findings.append(finding)
+      }
+    }
+  }
+
+  /// Resolve an embedding provider, extract function/initializer snippets from
+  /// the (already in-memory) sources, and run embedding-clone discovery.
+  /// Records a status/fallback note in the report; returns the discovered
+  /// semantic groups (empty when a provider is unavailable — the macOS-only
+  /// capability degrades gracefully rather than failing).
+  private func runSemanticPass(
+    over prepared: [PreparedFile], options: SemanticOptions, into report: inout AnalysisReport
+  ) async -> [CloneGroup] {
+    switch await SemanticDiscovery.resolveProvider(options) {
+    case .unavailable(let note):
+      report.semanticNote = note
+      return []
+    case .ready(let provider):
+      var snippets: [EmbeddingSnippet] = []
+      for file in prepared {
+        snippets.append(
+          contentsOf: FunctionSnippetExtractor.extract(
+            source: file.tokens.text.source, file: file.tokens.file))
+      }
+      do {
+        let groups = try await SemanticDiscovery.discover(
+          snippets: snippets, provider: provider, options: options)
+        report.semanticNote =
+          "semantic: embedded \(snippets.count) snippet(s), "
+          + "\(groups.count) candidate group(s) before precedence filtering"
+        return groups
+      } catch {
+        report.semanticNote = "semantic: embedding discovery failed (\(error)); structural only"
+        return []
       }
     }
   }
