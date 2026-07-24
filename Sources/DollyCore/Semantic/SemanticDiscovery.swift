@@ -25,7 +25,10 @@ public struct SemanticOptions: Sendable {
   public var bundlePath: String?
   /// Threshold preset (cosine / Jaccard floors).
   public var preset: SemanticPreset
-  /// Max tokens per snippet for bundle providers.
+  /// Max tokens per snippet for bundle providers. Defaults to 128 — the
+  /// MiniLM-class context window and a safe cap for fixed-shape Core ML
+  /// exports (a larger value overflows a `[1, 128]` model input). Snippets
+  /// past this are truncated.
   public var maxLength: Int
   /// Top-k neighbors per HNSW query.
   public var k: Int
@@ -33,7 +36,7 @@ public struct SemanticOptions: Sendable {
   public init(
     bundlePath: String? = nil,
     preset: SemanticPreset = .balanced,
-    maxLength: Int = 256,
+    maxLength: Int = 128,
     k: Int = 10
   ) {
     self.bundlePath = bundlePath
