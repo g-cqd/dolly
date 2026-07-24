@@ -71,7 +71,10 @@ dolly analyze --semantic --embedding-bundle Models/MiniLM Sources
   that is an English *natural-language* model, not code-trained, so its
   recall on idiom-level clones is materially lower than a code embedding
   model. It reliably recovers lexically-close idiom swaps; it misses more
-  distant ones.
+  distant ones. On large, boilerplate-heavy corpora it also tends to
+  *over-cluster* (many similar-looking visitor/handler methods collapse into
+  one big group) — prefer `--embedding-bundle` or `--embedding-preset strict`
+  there.
 - **Higher recall — bring a bundle.** `--embedding-bundle <dir>` points at a
   directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus a
   HuggingFace tokenizer (`tokenizer.json`, …) — e.g. a CodeBERT/GraphCodeBERT/
