@@ -2,7 +2,9 @@
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
 //
 //  `SemanticEmbeddingProvider` backed by a Core ML model + a HuggingFace
-//  `AutoTokenizer` (swift-transformers). The opt-in `--embedding-bundle`
+//  BERT WordPiece tokenizer (`WordPieceTokenizer`, built in rather than pulled
+//  from swift-transformers — see that file, and `WordPieceParityTests` for the
+//  token-for-token pin). The opt-in `--embedding-bundle`
 //  provider: pass a directory holding both the Core ML model
 //  (`.mlpackage` / `.mlmodelc`, compiled on first use) and the HF tokenizer
 //  folder (`tokenizer.json`, …). Covers the standard HF feature-extraction
@@ -18,7 +20,6 @@
 #if canImport(CoreML)
   import CoreML
   import Foundation
-  import Tokenizers
 
   final class HFSemanticEmbeddingProvider: SemanticEmbeddingProvider, @unchecked Sendable {
     let embeddingDimension: Int
@@ -75,7 +76,7 @@
       }
 
       do {
-        self.tokenizer = try await AutoTokenizer.from(modelFolder: bundleDir)
+        self.tokenizer = try WordPieceTokenizer(bundleDir: bundleDir)
       } catch {
         throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
       }
@@ -135,7 +136,7 @@
     }
 
     func embed(snippet: String) async throws -> [Float] {
-      // Tokenize via HF AutoTokenizer (BPE/WordPiece/SentencePiece, plus the
+      // Tokenize with the model's own WordPiece vocabulary (plus the
       // model's special tokens). Cap to the model's fixed length or maxLength.
       var ids = tokenizer.encode(text: snippet)
       let effectiveMax = fixedSequenceLength ?? maxLength
@@ -185,7 +186,7 @@
     // MARK: - Private
 
     private let model: MLModel
-    private let tokenizer: any Tokenizer
+    private let tokenizer: WordPieceTokenizer
     private let maxLength: Int
     private let inputIDsName: String
     private let attentionMaskName: String
