@@ -147,14 +147,19 @@ public struct Analyzer: Sendable {
   /// Run the duplication engine across the corpus and partition results
   /// into findings and suppressed findings.
   private func runEngine(over prepared: [PreparedFile], into report: inout AnalysisReport) async {
-    let enabledTypes = Set(
-      RuleID.allCases.filter(configuration.isEnabled).map(CloneReporting.cloneType(for:)))
-    guard !enabledTypes.isEmpty, !prepared.isEmpty else { return }
+    // The token/suffix-array engine handles exact/near/structural; the
+    // semantic (Type-4) type is produced only by the opt-in embedding pass
+    // (wired in `runSemanticDiscovery`), never by this detector, so it is
+    // excluded from the engine's requested types.
+    let structuralTypes = Set(
+      RuleID.allCases.filter(configuration.isEnabled).map(CloneReporting.cloneType(for:))
+    ).subtracting([.semantic])
+    guard !structuralTypes.isEmpty, !prepared.isEmpty else { return }
 
     let detector = DuplicationDetector(
       configuration: DuplicationConfiguration(
         minimumTokens: configuration.duplication?.minimumTokens ?? 50,
-        cloneTypes: enabledTypes,
+        cloneTypes: structuralTypes,
         minimumSimilarity: configuration.duplication?.minimumSimilarity ?? 0.8
       )
     )
