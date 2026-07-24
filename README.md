@@ -86,6 +86,18 @@ dolly analyze --semantic --semantic-max-group 25 .     # cap group size (default
   directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus a
   HuggingFace tokenizer (`tokenizer.json`, …) — e.g. a CodeBERT/GraphCodeBERT/
   MiniLM export. Code-trained bundles catch clones the NL model can't.
+- **Batteries included — the `dolly-full` build.** The
+  `dolly-full-<version>-macos-arm64` release archive ships an all-MiniLM-L6-v2
+  (Apache-2.0) Core ML bundle at `Models/` next to the binary. dolly discovers
+  a model adjacent to the executable automatically (checked before the
+  NLContextual default), so `dolly --semantic` uses the embedding model out of
+  the box — no `--embedding-bundle` flag. Delete `Models/` to fall back to the
+  on-device provider. `DOLLY_EMBEDDING_BUNDLE=<dir>` overrides the search for
+  installs that separate the binary from its resources (`bin/` + `share/`); an
+  explicit `--embedding-bundle` still wins over both. The plain `dolly` archive
+  has no model and behaves exactly as before (NLContextual default). The
+  status note names the model that actually ran (`… via bundle:MiniLM` vs
+  `… via NLContextualEmbedding`).
 - **Presets.** `--embedding-preset balanced` (default: cosine ≥ 0.85,
   Jaccard ≥ 0.20), `strict` (0.90 / 0.30), or `loose` (0.80 / 0.10).
 - **macOS-only, graceful.** The capability needs CoreML / NaturalLanguage.

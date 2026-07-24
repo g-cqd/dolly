@@ -12,6 +12,7 @@ import Foundation
 struct DeterministicEmbeddingProvider: SemanticEmbeddingProvider {
   let embeddingDimension: Int
   let ngramSize: Int
+  var providerName: String { "deterministic (n-gram hash, CI/smoke)" }
 
   init(dimension: Int = 128, ngramSize: Int = 3) {
     precondition(dimension > 0, "dimension must be > 0")

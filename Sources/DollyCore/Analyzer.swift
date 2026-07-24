@@ -223,7 +223,7 @@ public struct Analyzer: Sendable {
           snippets: snippets, provider: provider, options: options)
         let capLabel = options.maxGroupSize > 0 ? "\(options.maxGroupSize)/group" : "off"
         report.semanticNote =
-          "semantic: embedded \(snippets.count) snippet(s), "
+          "semantic: embedded \(snippets.count) snippet(s) via \(provider.providerName), "
           + "\(groups.count) candidate group(s) before precedence filtering "
           + "(group-size cap \(capLabel))"
         return groups
