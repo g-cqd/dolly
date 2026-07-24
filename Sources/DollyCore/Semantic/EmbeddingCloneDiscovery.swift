@@ -42,13 +42,17 @@ struct EmbeddingCloneDiscovery: Sendable {
   ///   - similarityThreshold: Minimum cosine similarity to keep a pair.
   ///   - minTokenOverlap: Minimum Jaccard over the snippets' identifier token
   ///     sets to keep a pair. `0.0` disables the gate.
+  ///   - maxGroupSize: Hard ceiling on component membership; a connected
+  ///     component larger than this is discarded as embedding-collapse noise
+  ///     rather than reported. `<= 0` disables the cap.
   /// - Returns: `[CloneGroup]` with `type == .semantic`.
   func discover(
     snippets: [EmbeddingSnippet],
     provider: any SemanticEmbeddingProvider,
     k: Int = 10,
     similarityThreshold: Double = 0.92,
-    minTokenOverlap: Double = 0.0
+    minTokenOverlap: Double = 0.0,
+    maxGroupSize: Int = 0
   ) async throws -> [CloneGroup] {
     guard snippets.count >= 2, k > 0, provider.embeddingDimension > 0 else { return [] }
 
@@ -107,6 +111,12 @@ struct EmbeddingCloneDiscovery: Sendable {
     var groups: [CloneGroup] = []
     groups.reserveCapacity(memberSet.count)
     for (root, members) in memberSet where members.count >= 2 {
+      // Hard group-size cap: a component this large is the embedding-collapse
+      // pathology (many plain declarations fused into one cone), not a real
+      // clone family — drop it wholesale rather than emit hundreds of noise
+      // pairs. Genuine families and code-trained bundle models stay well
+      // under any sane cap, so this is a no-op for them.
+      if maxGroupSize > 0, members.count > maxGroupSize { continue }
       let indices = members.sorted()
       let groupPairs = pairsByRoot[root] ?? []
       let avgSimilarity =
