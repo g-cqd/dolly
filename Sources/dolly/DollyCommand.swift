@@ -176,7 +176,9 @@ struct Analyze: AsyncParsableCommand {
         files.insert(path)
         continue
       }
-      var stack = [path]
+      // Absolute, matching what FileManager.enumerator(at:) produced:
+      // finding paths are part of the output contract.
+      var stack = [URL(fileURLWithPath: path).path]
       while let directory = stack.popLast() {
         guard let entries = try? manager.contentsOfDirectory(atPath: directory) else { continue }
         for entry in entries {
