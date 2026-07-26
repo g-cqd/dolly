@@ -14,7 +14,11 @@
 //  next real change). A tool-version mismatch discards the whole cache, so
 //  a facts-schema change can never deserialize into wrong shapes.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 struct FactsCache: Sendable {
   // MARK: - Entry

@@ -8,7 +8,11 @@
 //  a NIL-style token-LCS gate so scrambled statements don't pass as
 //  clones. Grouping stays connected-components over verified pairs.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - ClonePairInfo
 

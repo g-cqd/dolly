@@ -7,7 +7,18 @@
 //  single task, then treat as immutable — `search` is safe to call
 //  concurrently because the storage is value-type.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
+// sqrt/log/floor come from the platform math module; FoundationEssentials,
+// unlike Foundation, does not re-export it.
+#if canImport(Darwin)
+  import Darwin
+#else
+  import Glibc
+#endif
 
 // MARK: - HNSWConfiguration
 
