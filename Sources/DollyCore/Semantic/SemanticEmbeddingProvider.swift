@@ -8,7 +8,11 @@
 //  vs reduce, iteration vs recursion) that the token and structural
 //  detectors cannot reach.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - SemanticEmbeddingProvider
 

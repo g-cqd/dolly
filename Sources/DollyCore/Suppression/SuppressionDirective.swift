@@ -1,4 +1,8 @@
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 /// One parsed `@dl:` / `@dolly:` directive comment.
 ///
@@ -56,7 +60,8 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
     if text.hasPrefix("//") { text.removeFirst(2) }
     if text.hasPrefix("/*") { text.removeFirst(2) }
     if text.hasSuffix("*/") { text.removeLast(2) }
-    text = text.trimmingCharacters(in: .whitespaces)
+    text = String(
+      text.drop(while: \.isWhitespace).reversed().drop(while: \.isWhitespace).reversed())
 
     guard text.hasPrefix("@") else { return nil }
     text.removeFirst()
@@ -64,8 +69,10 @@ public struct SuppressionDirective: Sendable, Equatable, Codable {
     text.removeFirst(namespace.count)
 
     var reason: String?
-    if let range = text.range(of: "--") {
-      reason = String(text[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+    if let range = text.firstRange(of: "--") {
+      reason = String(
+        text[range.upperBound...].drop(while: \.isWhitespace)
+          .reversed().drop(while: \.isWhitespace).reversed())
       text = String(text[..<range.lowerBound])
     }
     let parts = text.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
