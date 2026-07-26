@@ -7,7 +7,11 @@
 //  code that differs only by renamed identifiers hashes to distinct buckets.
 //  Use a real provider (NLContextual / HF) for production semantic detection.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 struct DeterministicEmbeddingProvider: SemanticEmbeddingProvider {
   let embeddingDimension: Int

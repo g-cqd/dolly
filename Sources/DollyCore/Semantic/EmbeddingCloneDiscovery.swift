@@ -11,7 +11,11 @@
 //    5. Drop singletons; emit one `CloneGroup` (type `.semantic`) per
 //       component with `similarity` = average pairwise cosine.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - EmbeddingSnippet
 
