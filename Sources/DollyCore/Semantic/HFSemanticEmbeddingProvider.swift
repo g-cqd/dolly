@@ -67,16 +67,39 @@
         }
       }
 
-      let config = MLModelConfiguration()
-      config.computeUnits = .all
-      do {
-        self.model = try MLModel(contentsOf: compiledURL, configuration: config)
-      } catch {
-        throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
+      // Deliberately NOT `.all`: these are sequence-length-flexible exports,
+      // and a RoBERTa-family model whose output is
+      // `hidden_states [batch, sequence, hidden]` is data-dependent, which
+      // the Neural Engine runtime refuses. Worse, it refuses at *prediction*
+      // time by writing an opaque Espresso "Invalid blob shape" diagnostic
+      // straight to **stdout** — corrupting `--format json` for the caller
+      // (measured: CodeBERT emitted 19 KB of that garbage ahead of the
+      // report). Even probing `.all` first is unsafe, because the probe's
+      // own failure prints it. Cost is small and bounded (~0.95 s -> ~1.35 s
+      // for a 30-finding rank, mostly model load), and it buys uncorrupted
+      // machine-readable output plus RoBERTa-family bundles working at all.
+      var loaded: MLModel?
+      for units in [MLComputeUnits.cpuAndGPU, .cpuOnly] {
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = units
+        guard let candidate = try? MLModel(contentsOf: compiledURL, configuration: configuration)
+        else { continue }
+        if HFSemanticEmbeddingProvider.probeSucceeds(
+          candidate, inputIDsName: inputIDsName, attentionMaskName: attentionMaskName,
+          tokenTypeIDsName: tokenTypeIDsName, positionIDsName: positionIDsName)
+        {
+          loaded = candidate
+          break
+        }
       }
+      guard let resolvedModel = loaded else {
+        throw SemanticEmbeddingError.modelLoadFailed(
+          underlying: HFProviderError.noWorkingComputeUnit(compiledURL.lastPathComponent))
+      }
+      self.model = resolvedModel
 
       do {
-        self.tokenizer = try WordPieceTokenizer(bundleDir: bundleDir)
+        self.tokenizer = try BundleTokenizer.make(bundleDir: bundleDir)
       } catch {
         throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
       }
@@ -186,7 +209,7 @@
     // MARK: - Private
 
     private let model: MLModel
-    private let tokenizer: WordPieceTokenizer
+    private let tokenizer: any SubwordTokenizing
     private let maxLength: Int
     private let inputIDsName: String
     private let attentionMaskName: String
@@ -255,14 +278,57 @@
     }
   }
 
+  extension HFSemanticEmbeddingProvider {
+    /// Runs one tiny prediction to find out whether `model` can actually execute
+    /// on the compute units it was loaded with — Core ML defers that
+    /// incompatibility to prediction time.
+    fileprivate static func probeSucceeds(
+      _ model: MLModel,
+      inputIDsName: String,
+      attentionMaskName: String,
+      tokenTypeIDsName: String?,
+      positionIDsName: String?
+    ) -> Bool {
+      let declaredInputs = Set(model.modelDescription.inputDescriptionsByName.keys)
+      guard declaredInputs.contains(inputIDsName) else { return false }
+      let length = 4
+      guard
+        let ids = try? MLInt32Input.make(length: length, { _ in 1 }),
+        let mask = try? MLInt32Input.make(length: length, { _ in 1 })
+      else { return false }
+      var features: [String: MLFeatureValue] = [
+        inputIDsName: MLFeatureValue(multiArray: ids)
+      ]
+      if declaredInputs.contains(attentionMaskName) {
+        features[attentionMaskName] = MLFeatureValue(multiArray: mask)
+      }
+      for optional in [tokenTypeIDsName, positionIDsName] {
+        guard let name = optional, declaredInputs.contains(name),
+          let zeros = try? MLInt32Input.make(length: length, { _ in 0 })
+        else { continue }
+        features[name] = MLFeatureValue(multiArray: zeros)
+      }
+      guard let provider = try? MLDictionaryFeatureProvider(dictionary: features) else {
+        return false
+      }
+      return (try? model.prediction(from: provider)) != nil
+    }
+  }
+
   // MARK: - HFProviderError
 
   private enum HFProviderError: Error, CustomStringConvertible {
     case noModel(String)
+    case noWorkingComputeUnit(String)
 
     var description: String {
       switch self {
       case .noModel(let path): "No .mlpackage or .mlmodelc found in \(path)"
+      case .noWorkingComputeUnit(let name):
+        """
+        \(name) failed a trial prediction on every compute unit (GPU, CPU) — \
+        the export is likely incompatible with this Core ML runtime
+        """
       }
     }
   }
