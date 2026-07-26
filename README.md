@@ -86,10 +86,16 @@ dolly analyze --semantic --semantic-max-group 25 .     # cap group size (default
   directory holding a Core ML model (`Model.mlpackage` / `*.mlmodelc`) plus its
   WordPiece vocabulary (`vocab.txt`, or the vocab inside `tokenizer.json`) — e.g.
   an all-MiniLM-L6-v2 export. Such bundles catch clones the NL model can't.
-  **Tokenizer support is WordPiece (BERT-family) only**: dolly tokenizes in-house
-  rather than linking `swift-transformers`, so BPE/SentencePiece bundles
-  (CodeBERT, GraphCodeBERT, jina-v2-code, CodeT5+) fail to load and fall back to
-  the default provider rather than tokenizing wrongly.
+  Two tokenizer families are supported, both in-house (dolly links no HuggingFace
+  stack; each is pinned token-for-token against `swift-transformers`):
+  **WordPiece** (BERT-family) and **byte-level BPE** (RoBERTa/GPT-2 family, so
+  CodeBERT / GraphCodeBERT / jina-v2-code load). SentencePiece/Unigram bundles
+  fall back to the default provider rather than tokenizing wrongly.
+  **Prefer a sentence-embedding model over a masked-LM checkpoint:** on
+  arcleak/Sources, MiniLM produced 4 candidate groups where CodeBERT produced 30
+  — a masked-LM's raw vectors are anisotropic, so everything looks similar and
+  the groups smear. "Code-trained" is not the property that matters;
+  cosine-comparability is.
 - **Batteries included — the `dolly-full` build.** The
   `dolly-full-<version>-macos-arm64` release archive ships an all-MiniLM-L6-v2
   (Apache-2.0) Core ML bundle at `Models/` next to the binary. dolly discovers
