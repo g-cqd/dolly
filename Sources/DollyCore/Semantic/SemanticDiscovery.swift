@@ -11,7 +11,11 @@
 //  CoreML / NaturalLanguage) every branch returns `.unavailable`, so
 //  `--semantic` degrades to structural-only with a note and never fails.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - SemanticOptions
 

@@ -1,7 +1,11 @@
 //  SemanticConfiguration.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - SemanticPreset
 

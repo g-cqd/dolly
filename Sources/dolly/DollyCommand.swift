@@ -1,6 +1,23 @@
 public import ArgumentParser
 import DollyCore
-import Foundation
+import SystemPackage
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
+
+/// Writes `message` to stderr, so stdout stays machine-parseable.
+///
+/// `SystemPackage.FileDescriptor` rather than Foundation's `FileHandle`:
+/// FileHandle lives in corelibs Foundation, which re-links ~50 MiB of ICU into
+/// every Linux binary. Writing to fd 2 through libc directly would work too,
+/// but needs three separate unsafe/concurrency escapes (`fputs` is a pointer
+/// API and Glibc's `stderr` is a mutable global); this stays fully safe.
+private func writeStandardError(_ message: String) {
+  _ = try? FileDescriptor.standardError.writeAll(message.utf8)
+}
 
 @main
 struct DollyCommand: AsyncParsableCommand {
@@ -96,14 +113,13 @@ struct Analyze: AsyncParsableCommand {
     // Semantic-pass status / graceful-fallback note goes to stderr so stdout
     // stays machine-parseable.
     if let note = report.semanticNote {
-      FileHandle.standardError.write(Data((ToolInfo.name + ": " + note + "\n").utf8))
+      writeStandardError(ToolInfo.name + ": " + note + "\n")
     }
 
     if let writeBaseline {
       try Baseline(findings: report.findings).write(path: writeBaseline)
-      FileHandle.standardError.write(
-        Data("\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n".utf8)
-      )
+      writeStandardError(
+        "\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n")
       return
     }
     var baselinedCount = 0
@@ -122,7 +138,7 @@ struct Analyze: AsyncParsableCommand {
     if baselinedCount > 0 {
       summary += "; \(baselinedCount) baselined"
     }
-    FileHandle.standardError.write(Data((summary + "\n").utf8))
+    writeStandardError(summary + "\n")
 
     let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
     if failed {
@@ -150,32 +166,32 @@ struct Analyze: AsyncParsableCommand {
 
     for path in paths {
       guard
-        let isDirectory = try? URL(fileURLWithPath: path)
-          .resourceValues(forKeys: [.isDirectoryKey]).isDirectory
+        let attributes = try? manager.attributesOfItem(atPath: path),
+        let type = attributes[.type] as? FileAttributeType
       else {
         throw ValidationError("no such file or directory: \(path)")
       }
+      let isDirectory = type == .typeDirectory
       if !isDirectory {
         files.insert(path)
         continue
       }
-      let root = URL(fileURLWithPath: path)
-      guard
-        let enumerator = manager.enumerator(
-          at: root,
-          includingPropertiesForKeys: [.isRegularFileKey],
-          options: [.skipsHiddenFiles]
-        )
-      else { continue }
-      for case let url as URL in enumerator {
-        if skippedComponents.contains(url.lastPathComponent) {
-          enumerator.skipDescendants()
-          continue
-        }
-        guard url.pathExtension == "swift" else { continue }
-        let filePath = url.path
-        if !configuration.isExcluded(path: filePath) {
-          files.insert(filePath)
+      var stack = [path]
+      while let directory = stack.popLast() {
+        guard let entries = try? manager.contentsOfDirectory(atPath: directory) else { continue }
+        for entry in entries {
+          // Matches the old enumerator's `.skipsHiddenFiles` plus the
+          // `skipDescendants()` prune: a skipped directory is never descended.
+          if entry.hasPrefix(".") { continue }
+          if skippedComponents.contains(entry) { continue }
+          let full = directory + "/" + entry
+          let entryType =
+            (try? manager.attributesOfItem(atPath: full))?[.type] as? FileAttributeType
+          if entryType == .typeDirectory {
+            stack.append(full)
+          } else if full.hasSuffix(".swift"), !configuration.isExcluded(path: full) {
+            files.insert(full)
+          }
         }
       }
     }

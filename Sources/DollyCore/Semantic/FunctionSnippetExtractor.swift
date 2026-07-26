@@ -12,9 +12,14 @@
 //  the Analyzer already holds every file's source in memory, so snippets are
 //  extracted from those without a second read.
 
-import Foundation
 import SwiftParser
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 enum FunctionSnippetExtractor {
   static let minimumLines = 5
