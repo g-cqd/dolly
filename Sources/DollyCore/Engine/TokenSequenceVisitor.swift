@@ -4,8 +4,13 @@
 //  per-file intern table instead of per-token strings. Normalization
 //  happens at intern time with `TokenNormalizer.default` semantics.
 
-import Foundation
 import SwiftSyntax
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 // MARK: - TokenKind
 
