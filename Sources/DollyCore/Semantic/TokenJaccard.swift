@@ -8,7 +8,11 @@
 //  syntax-noise keywords; what remains is the snippet's identifier + literal
 //  vocabulary.
 
-import Foundation
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#else
+  import Foundation
+#endif
 
 enum TokenJaccard {
   /// Stop-words filtered out before Jaccard: Swift control-flow + declaration
