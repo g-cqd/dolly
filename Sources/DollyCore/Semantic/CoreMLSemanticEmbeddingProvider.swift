@@ -44,20 +44,18 @@
       inputName: String = "input_ids",
       outputName: String = "pooler_output"
     ) async throws {
-      let compiledURL: URL
-      if modelURL.pathExtension == "mlmodelc" {
-        compiledURL = modelURL
-      } else {
-        do {
-          compiledURL = try await MLModel.compileModel(at: modelURL)
-        } catch {
-          throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
-        }
-      }
-      do {
-        self.model = try MLModel(contentsOf: compiledURL)
-      } catch {
-        throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
+      let compiledURL = try await CoreMLModelLoader.compile(modelURL)
+      // Probe with a zero-filled window: this provider's export is fixed-shape,
+      // but the check costs one tiny prediction and keeps both providers on the
+      // same loading path.
+      self.model = try CoreMLModelLoader.loadRunnable(compiledURL: compiledURL) { candidate in
+        guard candidate.modelDescription.inputDescriptionsByName[inputName] != nil,
+          let zeros = try? MLInt32Input.make(length: contextWindow, { _ in 0 }),
+          let provider = try? MLDictionaryFeatureProvider(dictionary: [
+            inputName: MLFeatureValue(multiArray: zeros)
+          ])
+        else { return false }
+        return (try? candidate.prediction(from: provider)) != nil
       }
       self.tokenize = tokenizer
       self.embeddingDimension = embeddingDimension
