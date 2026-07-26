@@ -56,48 +56,13 @@
           underlying: HFProviderError.noModel(bundleDir.path))
       }
 
-      let compiledURL: URL
-      if resolvedModelURL.pathExtension == "mlmodelc" {
-        compiledURL = resolvedModelURL
-      } else {
-        do {
-          compiledURL = try await MLModel.compileModel(at: resolvedModelURL)
-        } catch {
-          throw SemanticEmbeddingError.modelLoadFailed(underlying: error)
-        }
-      }
+      let compiledURL = try await CoreMLModelLoader.compile(resolvedModelURL)
 
-      // Deliberately NOT `.all`. These exports are sequence-length-flexible,
-      // and a model whose output is `[batch, sequence, hidden]` has a
-      // data-dependent shape, which the Neural Engine runtime refuses — at
-      // *prediction* time, by writing an opaque Espresso "Invalid blob
-      // shape" diagnostic straight to **stdout**. That corrupts
-      // `--format json` for the caller and no Swift-side error handling can
-      // undo it (measured on a RoBERTa export: 19 KB of garbage ahead of the
-      // report). Even probing `.all` first is unsafe, because the probe's
-      // own failure is what prints it. Nothing is lost by skipping it:
-      // measured over 230 snippets, `.cpuAndGPU` ran 5.29 s against 5.49 s
-      // for `.all`. So start on GPU and step down only if that cannot run,
-      // with one tiny probe prediction to confirm before committing.
-      var loaded: MLModel?
-      for units in [MLComputeUnits.cpuAndGPU, .cpuOnly] {
-        let configuration = MLModelConfiguration()
-        configuration.computeUnits = units
-        guard let candidate = try? MLModel(contentsOf: compiledURL, configuration: configuration)
-        else { continue }
-        if HFSemanticEmbeddingProvider.probeSucceeds(
+      self.model = try CoreMLModelLoader.loadRunnable(compiledURL: compiledURL) { candidate in
+        HFSemanticEmbeddingProvider.probeSucceeds(
           candidate, inputIDsName: inputIDsName, attentionMaskName: attentionMaskName,
           tokenTypeIDsName: tokenTypeIDsName, positionIDsName: positionIDsName)
-        {
-          loaded = candidate
-          break
-        }
       }
-      guard let resolvedModel = loaded else {
-        throw SemanticEmbeddingError.modelLoadFailed(
-          underlying: HFProviderError.noWorkingComputeUnit(compiledURL.lastPathComponent))
-      }
-      self.model = resolvedModel
 
       do {
         self.tokenizer = try WordPieceTokenizer(bundleDir: bundleDir)
@@ -320,16 +285,10 @@
 
   private enum HFProviderError: Error, CustomStringConvertible {
     case noModel(String)
-    case noWorkingComputeUnit(String)
 
     var description: String {
       switch self {
       case .noModel(let path): "No .mlpackage or .mlmodelc found in \(path)"
-      case .noWorkingComputeUnit(let name):
-        """
-        \(name) failed a trial prediction on every compute unit (GPU, CPU) — \
-        the export is likely incompatible with this Core ML runtime
-        """
       }
     }
   }
