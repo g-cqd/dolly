@@ -145,8 +145,10 @@ enum SemanticDiscovery {
     /// dev/test builds, whose executable directory holds no model — which
     /// leaves the on-device NLContextual default in charge.
     static func bundledModelDirectory() -> URL? {
-      let execURL =
-        (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments.first ?? "dolly"))
+      // CommandLine rather than Bundle.main.executableURL: Bundle lives in
+      // corelibs Foundation, which would re-link ~51 MiB of ICU on Linux. argv[0]
+      // is what Bundle.main resolves from for a CLI anyway.
+      let execURL = URL(fileURLWithPath: CommandLine.arguments.first ?? "dolly")
         .resolvingSymlinksInPath()
       return bundledModelDirectory(
         executableDir: execURL.deletingLastPathComponent(),
