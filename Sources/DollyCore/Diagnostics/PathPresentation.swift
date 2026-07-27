@@ -53,7 +53,7 @@ extension Finding {
       // The note embeds member paths as text; rewrite them the same way so a
       // relative report never mixes both spellings.
       note: note.map { note in
-        related.reduce(note) { $0.replacingOccurrences(of: $1.path, with: strip($1.path)) }
+        related.reduce(note) { $0.replacing($1.path, with: strip($1.path)) }
       },
       related: related.map {
         RelatedLocation(path: strip($0.path), line: $0.line, column: $0.column)
