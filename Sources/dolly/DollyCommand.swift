@@ -56,6 +56,22 @@ struct Analyze: AsyncParsableCommand {
   @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
   var writeBaseline: String?
 
+  @Option(
+    name: .long,
+    help: ArgumentHelp(
+      "Report only findings touching this file; repeatable. The whole corpus is still analyzed "
+        + "— duplication is a corpus property, so narrowing the input would fabricate and lose "
+        + "clones alike. A clone group qualifies when any of its members is listed, not just the "
+        + "one it happens to be anchored at."))
+  var only: [String] = []
+
+  @Option(
+    name: .customLong("only-from"),
+    help: ArgumentHelp(
+      "Read --only paths from a file, one per line ('-' reads stdin). For CI: "
+        + "`git diff --name-only ... | dolly analyze . --only-from -`."))
+  var onlyFrom: String?
+
   @Flag(name: .long, help: "Disable the facts cache for this run.")
   var noCache = false
 
@@ -94,6 +110,7 @@ struct Analyze: AsyncParsableCommand {
 
   func run() async throws {
     let configuration = try loadConfiguration()
+    let reportScope = try resolveReportScope()
     let files = try discoverSwiftFiles(configuration: configuration)
     guard !files.isEmpty else { throw ValidationError(DollyError.noInputs.description) }
 
@@ -107,7 +124,8 @@ struct Analyze: AsyncParsableCommand {
         bundlePath: embeddingBundle, preset: embeddingPreset, maxGroupSize: semanticMaxGroup)
       : nil
     var report = await Analyzer(
-      configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions
+      configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions,
+      reportScope: reportScope
     ).analyze(files: files)
 
     // Semantic-pass status / graceful-fallback note goes to stderr so stdout
@@ -117,6 +135,8 @@ struct Analyze: AsyncParsableCommand {
     }
 
     if let writeBaseline {
+      // Guarded in validate(): a baseline is whole-corpus debt by definition,
+      // so it can never be written from a scoped run.
       try Baseline(findings: report.findings).write(path: writeBaseline)
       writeStandardError(
         "\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n")
@@ -138,12 +158,75 @@ struct Analyze: AsyncParsableCommand {
     if baselinedCount > 0 {
       summary += "; \(baselinedCount) baselined"
     }
+    if !report.outOfScope.isEmpty {
+      summary += "; \(report.outOfScope.count) out of scope"
+    }
     writeStandardError(summary + "\n")
 
     let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
     if failed {
       throw ExitCode(1)
     }
+  }
+
+  func validate() throws {
+    // A baseline records the whole corpus's accepted debt. Writing one from a
+    // scoped run would silently accept only the scoped subset and drop
+    // everything else from the baseline, so refuse rather than surprise.
+    if writeBaseline != nil, !only.isEmpty || onlyFrom != nil {
+      throw ValidationError(
+        "--write-baseline records whole-corpus debt and cannot be combined with "
+          + "--only/--only-from. Write the baseline unscoped, then scope the runs that use it.")
+    }
+    if onlyFrom == "-", paths == ["-"] {
+      throw ValidationError("--only-from - reads stdin, so paths cannot also come from stdin.")
+    }
+  }
+
+  /// A caller-supplied path list is trust-boundary input, so the read is
+  /// bounded: 2600 absolute paths is ~310 KB, and anything past the cap is a
+  /// mistake or an attack rather than a change set.
+  private static let scopeByteCap = 4 * 1024 * 1024
+
+  /// nil means "report everything". An *empty* scope is meaningful and
+  /// distinct: `--only-from` pointed at a change set with no Swift files, so
+  /// nothing should be reported.
+  private func resolveReportScope() throws -> ReportScope? {
+    guard !only.isEmpty || onlyFrom != nil else { return nil }
+    var entries = only
+    if let onlyFrom {
+      entries.append(contentsOf: try readScopeEntries(from: onlyFrom))
+    }
+    return ReportScope(files: entries)
+  }
+
+  private func readScopeEntries(from source: String) throws -> [String] {
+    let text: String
+    if source == "-" {
+      var accumulated = ""
+      while let line = readLine(strippingNewline: true) {
+        accumulated += line + "\n"
+        guard accumulated.utf8.count <= Self.scopeByteCap else {
+          throw ValidationError("--only-from - exceeds the \(Self.scopeByteCap) byte cap")
+        }
+      }
+      text = accumulated
+    } else {
+      let attributes = try? FileManager.default.attributesOfItem(atPath: source)
+      guard (attributes?[.type] as? FileAttributeType) == .typeRegular else {
+        throw ValidationError("--only-from: not a regular file: \(source)")
+      }
+      if let size = attributes?[.size] as? Int, size > Self.scopeByteCap {
+        throw ValidationError("--only-from: \(source) exceeds the \(Self.scopeByteCap) byte cap")
+      }
+      guard let contents = try? String(contentsOfFile: source, encoding: .utf8) else {
+        throw ValidationError("--only-from: unreadable: \(source)")
+      }
+      text = contents
+    }
+    return text.split(separator: "\n")
+      .map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { !$0.isEmpty }
   }
 
   private func loadConfiguration() throws -> Configuration {
