@@ -28,14 +28,20 @@ public struct Analyzer: Sendable {
   /// is off and analysis is byte-identical to the structural-only default.
   public let semantic: SemanticOptions?
 
+  /// Narrows the *report* to a set of files; nil reports everything. Detection
+  /// always runs over the whole corpus either way — see ``ReportScope``.
+  public let reportScope: ReportScope?
+
   public init(
     configuration: Configuration = .default,
     cacheURL: URL? = nil,
-    semantic: SemanticOptions? = nil
+    semantic: SemanticOptions? = nil,
+    reportScope: ReportScope? = nil
   ) {
     self.configuration = configuration
     self.cacheURL = cacheURL
     self.semantic = semantic
+    self.reportScope = reportScope
   }
 
   /// The platform cache default: `~/Library/Caches/dolly/facts.json` on
@@ -203,6 +209,12 @@ public struct Analyzer: Sendable {
       // cover the anchor line.
       if let reason = tables[finding.path]?.suppression(for: finding.rule, line: finding.line) {
         report.suppressed.append(.init(finding: finding, reason: reason))
+      } else if let reportScope, !reportScope.contains(finding) {
+        // Kept, not dropped: the count stays visible in the summary, and
+        // `--format json` still carries them for anyone who wants the whole
+        // picture from a scoped run. Scope is applied after suppression so
+        // suppression debt keeps counting the whole corpus.
+        report.outOfScope.append(finding)
       } else {
         report.findings.append(finding)
       }
