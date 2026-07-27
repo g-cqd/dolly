@@ -65,12 +65,25 @@ struct Analyze: AsyncParsableCommand {
         + "one it happens to be anchored at."))
   var only: [String] = []
 
+  // ArgumentParser option declarations are a fixed shape (@Option, name:,
+  // help: ArgumentHelp(...), var); two of them in a row are token-identical by
+  // construction, and collapsing them would mean generating the CLI surface
+  // rather than declaring it.
+  // @dl:accept near-clone -- declarative CLI surface, not copied logic
   @Option(
     name: .customLong("only-from"),
     help: ArgumentHelp(
       "Read --only paths from a file, one per line ('-' reads stdin). For CI: "
         + "`git diff --name-only ... | dolly analyze . --only-from -`."))
   var onlyFrom: String?
+
+  @Option(
+    name: .customLong("relative-to"),
+    help: ArgumentHelp(
+      "Report paths relative to this directory. Makes fingerprints (and so baselines) and SARIF "
+        + "uris independent of where the repository is checked out; GitHub code scanning also "
+        + "requires repo-relative uris to link findings. Use `--relative-to .` in CI."))
+  var relativeTo: String?
 
   @Flag(name: .long, help: "Disable the facts cache for this run.")
   var noCache = false
@@ -127,6 +140,12 @@ struct Analyze: AsyncParsableCommand {
       configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions,
       reportScope: reportScope
     ).analyze(files: files)
+
+    // Before anything reads a path: baselines, SARIF and the formatted output
+    // must all agree on one spelling, and the fingerprint is derived from it.
+    if let relativeTo {
+      report = report.relativized(to: relativeTo)
+    }
 
     // Semantic-pass status / graceful-fallback note goes to stderr so stdout
     // stays machine-parseable.
