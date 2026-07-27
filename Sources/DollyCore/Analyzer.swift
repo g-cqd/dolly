@@ -48,6 +48,11 @@ public struct Analyzer: Sendable {
   }
 
   public func analyze(files: [String]) async -> AnalysisReport {
+    // Canonicalize before anything reads a path: `Finding.path` feeds the
+    // fingerprint, and the corpus must not contain the same file twice under
+    // two spellings (it would clone-match against itself).
+    let files = SourcePath.canonicalized(files)
+
     var report = AnalysisReport()
     report.analyzedFileCount = files.count
 
