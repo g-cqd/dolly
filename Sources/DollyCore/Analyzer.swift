@@ -122,6 +122,17 @@ public struct Analyzer: Sendable {
       freshCache.persist(url: cacheURL)
     }
 
+    // Clone detection is whole-corpus by construction: a region is a clone
+    // because a match exists *elsewhere in the corpus*. Running the engine over
+    // a partially-read corpus would drop real clones and surface intra-subset
+    // ones the whole corpus attributes differently, so a cancelled run reports
+    // nothing rather than something wrong.
+    if Task.isCancelled {
+      var cancelled = AnalysisReport()
+      cancelled.wasCancelled = true
+      return cancelled
+    }
+
     await runEngine(over: prepared, into: &report)
     report.findings.sort()
     return report
