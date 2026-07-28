@@ -135,6 +135,13 @@ public struct Analyzer: Sendable {
 
     await runEngine(over: prepared, into: &report)
     report.findings.sort()
+
+    // Anchor fingerprints to the repository, not to this machine's checkout path
+    // or to whether the caller remembered --relative-to. Display is a separate
+    // concern, handled by PathPresentation.
+    if let root = RepositoryRoot.common(of: files) {
+      report = report.fingerprintsAnchored(to: root)
+    }
     return report
   }
 
