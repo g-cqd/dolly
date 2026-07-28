@@ -57,7 +57,40 @@ extension Finding {
       },
       related: related.map {
         RelatedLocation(path: strip($0.path), line: $0.line, column: $0.column)
-      }
+      },
+      // An explicit --relative-to is an explicit anchor request, so it sets the
+      // fingerprint spelling too; from the repository root it matches the
+      // automatic anchor exactly.
+      fingerprintPath: strip(path)
     )
+  }
+}
+
+extension AnalysisReport {
+  /// Rewrites every finding's `fingerprintPath` to be relative to `root`.
+  ///
+  /// Applied once, in the analyzer, before anything reads a fingerprint — so
+  /// baselines, SARIF and the report agree, and agree across machines.
+  func fingerprintsAnchored(to root: String) -> AnalysisReport {
+    func anchor(_ finding: Finding) -> Finding {
+      Finding(
+        rule: finding.rule,
+        severity: finding.severity,
+        path: finding.path,
+        line: finding.line,
+        column: finding.column,
+        message: finding.message,
+        note: finding.note,
+        related: finding.related,
+        fingerprintPath: RepositoryRoot.relativize(finding.path, to: root)
+      )
+    }
+    var copy = self
+    copy.findings = findings.map(anchor)
+    copy.outOfScope = outOfScope.map(anchor)
+    copy.suppressed = suppressed.map {
+      SuppressedFinding(finding: anchor($0.finding), reason: $0.reason)
+    }
+    return copy
   }
 }
