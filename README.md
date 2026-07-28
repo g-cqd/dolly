@@ -254,6 +254,72 @@ without a wall of noise.
   one `unsafe` fingerprint fast path is isolated and invariant-commented),
   Swift concurrency only (no GCD), swift-format gated.
 
+## Using it as a pull-request gate
+
+The corpus is always **everything**; only the *report* is scoped. Passing a
+pull request's changed files as the input produces a different and wrong
+answer, because these are whole-program analyses — a region is a clone because a matching region exists elsewhere in the corpus; shrink it and real clones vanish while intra-subset ones surface that the whole corpus attributes elsewhere.
+
+```sh
+git diff --name-only origin/main... -- '*.swift' > changed.txt
+dolly analyze . --only-from changed.txt --baseline .dolly-baseline.json
+```
+
+`--only` (repeatable) and `--only-from <file|->` scope the report. Findings
+outside the scope are kept on `outOfScope` and counted in the summary, so a
+scoped run can never be mistaken for a clean one. An empty scope reports
+nothing — a pull request that changed no Swift is not a licence to report the
+whole repository.
+
+### Fingerprints are portable by default
+
+`Finding.fingerprint` — what `--baseline` matches and what SARIF exports as
+`partialFingerprints` — hashes the path **relative to the repository root**,
+found by walking up for `.git`. So a baseline committed to the repository
+matches on any machine, and it does not matter whether the corpus was named as
+a directory or as an explicit file list, or where the checkout lives.
+
+`--relative-to <dir>` additionally changes the paths that are *displayed* (and
+re-anchors fingerprints to that directory, which from the repository root is
+the same anchor). SARIF uris must be repository-relative for code scanning to
+link them, so pass it when uploading SARIF.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | no findings |
+| `1` | findings — and nothing else |
+| `64` | usage error (a path that does not exist) |
+| `70` | internal failure, including a run cancelled before the corpus was complete |
+| `78` | invalid configuration |
+
+`1` means findings *only*, so a step that posts a review comment on `1` will
+not fire on a typo in the config file. A cancelled run reports **no** findings
+and exits `70` rather than looking clean: a whole-program analysis over a
+partial corpus does not report less, it reports wrongly.
+
+### Gating policy
+
+Duplicate-code judgement is subjective enough that failing on everything gets
+the check rubber-stamped or switched off. Fail on `exact-clone` only — Type-1,
+byte-identical token sequences, no threshold and no judgement — and leave
+`near-clone` and `structural-clone` advisory:
+
+```json
+{
+  "rules": {
+    "exact-clone":      { "severity": "error" },
+    "near-clone":       { "severity": "warning" },
+    "structural-clone": { "severity": "warning" }
+  }
+}
+```
+
+Then run **without** `--strict`: dolly exits `1` on errors only. Measured on a
+39-finding corpus, that gates on 11 objective findings while still reporting
+the other 28.
+
 ## License
 
 MIT — see `LICENSE`.
