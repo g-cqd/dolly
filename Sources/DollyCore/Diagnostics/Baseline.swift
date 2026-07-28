@@ -74,7 +74,7 @@ extension Finding {
   public var fingerprint: String {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325
     let prime: UInt64 = 0x0000_0100_0000_01b3
-    for byte in "\(rule.rawValue)|\(path)|\(line)|\(column)|\(message)".utf8 {
+    for byte in "\(rule.rawValue)|\(fingerprintPath ?? path)|\(line)|\(column)|\(message)".utf8 {
       hash ^= UInt64(byte)
       hash &*= prime
     }

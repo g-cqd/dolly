@@ -26,6 +26,14 @@ public struct Finding: Sendable, Equatable {
   /// carries the same information as text). Not part of the fingerprint:
   /// membership can shift without moving the anchor.
   public let related: [RelatedLocation]
+  /// The path spelling the fingerprint hashes, when it must differ from the
+  /// one shown.
+  ///
+  /// Set to the repository-relative path so a baseline is portable by
+  /// construction: `--relative-to` then changes only what is *displayed*, and
+  /// forgetting it can no longer silently invalidate a baseline. nil outside a
+  /// repository, where `path` is hashed as before.
+  public let fingerprintPath: String?
 
   public init(
     rule: RuleID,
@@ -35,7 +43,8 @@ public struct Finding: Sendable, Equatable {
     column: Int,
     message: String,
     note: String? = nil,
-    related: [RelatedLocation] = []
+    related: [RelatedLocation] = [],
+    fingerprintPath: String? = nil
   ) {
     self.rule = rule
     self.severity = severity
@@ -45,6 +54,7 @@ public struct Finding: Sendable, Equatable {
     self.message = message
     self.note = note
     self.related = related
+    self.fingerprintPath = fingerprintPath
   }
 }
 
