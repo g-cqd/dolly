@@ -152,6 +152,17 @@ struct Analyze: AsyncParsableCommand {
 
     // A cancelled run analysed a partial corpus and therefore reports nothing.
     // That must never read as a clean gate — exit as an internal failure.
+    // A corpus where EVERY file degraded analyzed nothing; exiting 0 would be
+    // a green gate over unscanned code. Partial degradation stays a warning —
+    // single unreadable files are reported per-file — but total failure is a
+    // broken gate.
+    if report.analyzedFileCount > 0, report.degradedFiles.count >= report.analyzedFileCount {
+      writeStandardError(
+        "dolly: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
+      )
+      throw ExitCode(ExitStatus.internalFailure)
+    }
+
     if report.wasCancelled {
       writeStandardError(
         "dolly: run cancelled before the corpus was complete; no findings reported\n")
