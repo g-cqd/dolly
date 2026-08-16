@@ -116,7 +116,7 @@ public struct Analyzer: Sendable {
     // Persist only when contents changed: fresh extractions happened, or
     // entries for absent files were pruned (the rebuilt cache only ever
     // contains this run's files).
-    if let cacheURL, let cache,
+    if !Task.isCancelled, let cacheURL, let cache,
       report.cacheMisses > 0 || Set(cache.entries.keys) != Set(freshCache.entries.keys)
     {
       freshCache.persist(url: cacheURL)
@@ -135,6 +135,15 @@ public struct Analyzer: Sendable {
 
     await runEngine(over: prepared, into: &report)
     report.findings.sort()
+
+    // Re-check AFTER the engine: cancellation landing mid-engine truncates
+    // frontier expansion, so clone groups come back split or missing — a
+    // partial report that would otherwise be emitted as a complete one.
+    if Task.isCancelled {
+      var cancelled = AnalysisReport()
+      cancelled.wasCancelled = true
+      return cancelled
+    }
 
     // Anchor fingerprints to the repository, not to this machine's checkout path
     // or to whether the caller remembered --relative-to. Display is a separate
