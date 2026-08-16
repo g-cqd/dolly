@@ -126,6 +126,15 @@ struct Analyze: AsyncParsableCommand {
     let reportScope = try resolveReportScope()
     let files = try discoverSwiftFiles(configuration: configuration)
     guard !files.isEmpty else { throw ValidationError(DollyError.noInputs.description) }
+    // A non-empty scope that intersects zero corpus files is almost always a
+    // misconfiguration (paths relative to the wrong directory, wrong workdir),
+    // and it silently reports nothing. Warn loudly; an *empty* scope stays
+    // silent — "no Swift changed" is legitimate.
+    if let scope = reportScope, !scope.files.isEmpty, !files.contains(where: scope.files.contains) {
+      writeStandardError(
+        "dolly: warning: --only scope matches no analyzed file — check that scope paths are relative to the right directory\n"
+      )
+    }
 
     let cacheURL: URL? =
       noCache
@@ -164,14 +173,14 @@ struct Analyze: AsyncParsableCommand {
     if let writeBaseline {
       // Guarded in validate(): a baseline is whole-corpus debt by definition,
       // so it can never be written from a scoped run.
-      try Baseline(findings: report.findings).write(path: writeBaseline)
+      try baselineOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
       writeStandardError(
         "\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n")
       return
     }
     var baselinedCount = 0
     if let baseline {
-      let loaded = try Baseline.load(path: baseline)
+      let loaded = try baselineOrExit { try Baseline.load(path: baseline) }
       let (kept, baselined) = loaded.filter(report.findings)
       report.findings = kept
       baselinedCount = baselined.count
@@ -255,9 +264,19 @@ struct Analyze: AsyncParsableCommand {
       // Standard library rather than trimmingCharacters(in:), which is
       // corelibs-only: dolly builds against FoundationEssentials on Linux.
       .map { line -> String in
-        let horizontal: (Character) -> Bool = { $0 == " " || $0 == "\t" }
-        return String(
-          line.drop(while: horizontal).reversed().drop(while: horizontal).reversed())
+        // \r too: a CRLF scope file (Windows-authored diff, autocrlf) would
+        // otherwise match nothing — every finding lands out of scope and the
+        // gate silently passes.
+        let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
+        var entry = String(
+          line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
+        // git C-quotes paths with special bytes unless core.quotepath=false;
+        // strip the quotes so plain quoted paths keep matching.
+        if entry.hasPrefix("\"") && entry.hasSuffix("\"") && entry.count >= 2 {
+          entry = String(entry.dropFirst().dropLast())
+            .replacing("\\\"", with: "\"").replacing("\\\\", with: "\\")
+        }
+        return entry
       }
       .filter { !$0.isEmpty }
   }
@@ -276,6 +295,18 @@ struct Analyze: AsyncParsableCommand {
 
   /// A malformed config is a broken gate, not a finding — exit 78 so CI can
   /// tell the two apart instead of reporting a typo as analysis output.
+
+  /// A missing or corrupt baseline is a broken gate, not a finding — exit 78
+  /// so CI cannot mistake it for "findings found" (exit 1).
+  private func baselineOrExit<T>(_ body: () throws -> T) throws -> T {
+    do {
+      return try body()
+    } catch {
+      writeStandardError("dolly: \(error)\n")
+      throw ExitCode(ExitStatus.badConfiguration)
+    }
+  }
+
   private func loadConfiguration() throws -> Configuration {
     do {
       return try loadConfigurationUncaught()
@@ -310,7 +341,11 @@ struct Analyze: AsyncParsableCommand {
 
     for path in paths {
       guard
-        let attributes = try? manager.attributesOfItem(atPath: path),
+        // Resolved first: attributesOfItem does not traverse a final symlink,
+        // so a linked Sources/ would classify as a "file", degrade, and
+        // exit 0 over zero analyzed code.
+        let attributes = try? manager.attributesOfItem(
+          atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
         let type = attributes[.type] as? FileAttributeType
       else {
         throw ValidationError("no such file or directory: \(path)")
@@ -332,7 +367,10 @@ struct Analyze: AsyncParsableCommand {
           if skippedComponents.contains(entry) { continue }
           let full = directory + "/" + entry
           let entryType =
-            (try? manager.attributesOfItem(atPath: full))?[.type] as? FileAttributeType
+            // Resolve so symlinked subtrees and files are walked too.
+            (try? manager.attributesOfItem(
+              atPath: URL(fileURLWithPath: full).resolvingSymlinksInPath().path))?[
+              .type] as? FileAttributeType
           if entryType == .typeDirectory {
             stack.append(full)
           } else if full.hasSuffix(".swift"), !configuration.isExcluded(path: full) {
