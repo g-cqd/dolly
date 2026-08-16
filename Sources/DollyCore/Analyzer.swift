@@ -48,8 +48,14 @@ public struct Analyzer: Sendable {
   /// macOS; the XDG cache equivalent on Linux (both via FileManager's
   /// caches directory).
   public static func defaultCacheURL() -> URL? {
+    // Namespaced per workspace: one global file meant analyzing repo B evicted
+    // repo A's entries, so alternating projects never hit.
     FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
       .appending(path: "dolly", directoryHint: .isDirectory)
+      .appending(
+        path: RepositoryRoot.workspaceKey(from: FileManager.default.currentDirectoryPath),
+        directoryHint: .isDirectory
+      )
       .appending(path: "facts.json")
   }
 

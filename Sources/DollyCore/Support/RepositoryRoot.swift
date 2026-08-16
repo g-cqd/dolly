@@ -17,7 +17,7 @@
 /// So the fingerprint stops depending on how the run was spelled at all: it
 /// hashes the path relative to the repository root, found here, whatever the
 /// report is later formatted to show.
-enum RepositoryRoot {
+public enum RepositoryRoot {
   /// Walks up from `path` looking for a `.git` entry.
   ///
   /// Both a directory (an ordinary clone) and a file (a worktree or submodule,
@@ -59,5 +59,25 @@ enum RepositoryRoot {
     let prefix = root.hasSuffix("/") ? root : root + "/"
     guard path.hasPrefix(prefix) else { return path }
     return String(path.dropFirst(prefix.count))
+  }
+}
+
+extension RepositoryRoot {
+  /// A short, filesystem-safe key identifying the repository the current
+  /// working directory belongs to (or the directory itself, outside one).
+  ///
+  /// The default facts cache used to be one global file per tool, so running
+  /// against a second repository evicted the first's entries — content
+  /// fingerprints kept that correct, but alternating projects never hit.
+  /// Namespacing the default path by this key gives each workspace its own
+  /// cache. FNV-1a over the root path: identity hashing, not security.
+  public static func workspaceKey(from directory: String) -> String {
+    let root = detect(from: directory + "/.") ?? directory
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in root.utf8 {
+      hash ^= UInt64(byte)
+      hash &*= 0x0000_0100_0000_01b3
+    }
+    return String(hash, radix: 16, uppercase: false)
   }
 }

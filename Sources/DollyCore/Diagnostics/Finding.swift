@@ -70,7 +70,7 @@ extension Finding: Comparable {
 
 extension Finding: Codable {
   private enum CodingKeys: String, CodingKey {
-    case rule, severity, path, line, column, message, note, related, fingerprint
+    case rule, severity, path, line, column, message, note, related, fingerprintPath, fingerprint
   }
 
   public init(from decoder: any Decoder) throws {
@@ -83,7 +83,8 @@ extension Finding: Codable {
       column: try container.decode(Int.self, forKey: .column),
       message: try container.decode(String.self, forKey: .message),
       note: try container.decodeIfPresent(String.self, forKey: .note),
-      related: try container.decodeIfPresent([RelatedLocation].self, forKey: .related) ?? []
+      related: try container.decodeIfPresent([RelatedLocation].self, forKey: .related) ?? [],
+      fingerprintPath: try container.decodeIfPresent(String.self, forKey: .fingerprintPath)
     )
     // fingerprint is derived — ignored on decode, recomputed on access.
   }
