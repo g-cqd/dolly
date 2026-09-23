@@ -279,13 +279,35 @@ struct StructuralCloneDetector: Sendable {
     return convertToCloneGroups(groups, documentInfo: documentInfo, pairs: pairs)
   }
 
-  /// Convert component groups to CloneGroups.
-  private func convertToCloneGroups(
+  /// Convert disjoint component groups to CloneGroups, preserving pair order
+  /// within each group's similarity sum.
+  /// - Complexity: O(v log v + e), where v is the number of document IDs and
+  ///   e is the number of verified pairs; fingerprint sorting accounts for
+  ///   the logarithmic term.
+  func convertToCloneGroups(
     _ groups: [[Int]],
     documentInfo: [Int: DocumentLocationInfo],
     pairs: [ClonePairInfo]
   ) -> [CloneGroup] {
-    groups.compactMap { component -> CloneGroup? in
+    var componentForDocument: [Int: Int] = [:]
+    componentForDocument.reserveCapacity(documentInfo.count)
+    for (groupIndex, component) in groups.enumerated() {
+      for documentID in component {
+        componentForDocument[documentID] = groupIndex
+      }
+    }
+
+    var similaritySums = [Double](repeating: 0, count: groups.count)
+    var pairCounts = [Int](repeating: 0, count: groups.count)
+    for pair in pairs {
+      guard let groupIndex = componentForDocument[pair.doc1.id],
+        componentForDocument[pair.doc2.id] == groupIndex
+      else { continue }
+      similaritySums[groupIndex] += pair.similarity
+      pairCounts[groupIndex] += 1
+    }
+
+    return groups.enumerated().compactMap { groupIndex, component -> CloneGroup? in
       let clones = component.compactMap { docId -> Clone? in
         guard let info = documentInfo[docId] else { return nil }
         return Clone(
@@ -300,14 +322,10 @@ struct StructuralCloneDetector: Sendable {
 
       guard clones.count >= 2 else { return nil }
 
-      // Calculate average similarity within group
-      let groupPairs = pairs.filter { pair in
-        component.contains(pair.doc1.id) && component.contains(pair.doc2.id)
-      }
       let avgSimilarity =
-        groupPairs.isEmpty
+        pairCounts[groupIndex] == 0
         ? minimumSimilarity
-        : groupPairs.reduce(0.0) { $0 + $1.similarity } / Double(groupPairs.count)
+        : similaritySums[groupIndex] / Double(pairCounts[groupIndex])
 
       // Generate fingerprint from document IDs
       let fingerprint = component.sorted().map(String.init).joined(separator: "-")
