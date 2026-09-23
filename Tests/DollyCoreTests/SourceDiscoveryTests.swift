@@ -109,6 +109,20 @@ import Testing
         == realFiles(under: walked) + [walked.path + "/Sources/Broken.swift"])
   }
 
+  /// Exclusion matches the spelling a file is reached by. A link named like an
+  /// exclude pattern, queued before the directory it points to, must not claim
+  /// that directory, or its files vanish with the link's.
+  @Test("An excluded link does not hide the directory it points to")
+  func excludedLinkDoesNotHideItsTarget() throws {
+    let (scratch, root) = try makeScratch()
+    defer { try? FileManager.default.removeItem(at: scratch) }
+    try write("Sources/Sub/C.swift", in: root)
+    try link("Vendor", to: "Sources/Sub", in: root)
+
+    let files = SourceDiscovery.swiftFiles(in: root.path) { $0.contains("/Vendor/") }
+    #expect(files == realFiles(under: root) + [root.path + "/Sources/Sub/C.swift"])
+  }
+
   @Test("Hidden entries, build products and excluded paths are skipped")
   func skippedEntries() throws {
     let (scratch, root) = try makeScratch()
