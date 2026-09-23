@@ -28,6 +28,10 @@ public enum SourceDiscovery {
   /// The `.swift` files under `directory` that `isExcluded` does not reject,
   /// sorted.
   ///
+  /// `isExcluded` is asked about each file's path as the walk reaches it, and
+  /// about each directory's with a trailing `/`; an excluded directory is not
+  /// walked.
+  ///
   /// Paths are absolute and spelled through `directory` as given; `SourcePath`
   /// canonicalizes them for analysis. Entries are visited in name order, so the
   /// spelling a file is listed under does not depend on directory order. An
@@ -67,7 +71,10 @@ public enum SourceDiscovery {
           attributes = try? manager.attributesOfItem(atPath: resolved)
         }
         if let attributes, (attributes[.type] as? FileAttributeType) == .typeDirectory {
-          guard
+          // Every file below an excluded spelling would be excluded, so it is
+          // not walked, and it must not claim the directory: the spelling that
+          // is not excluded would then be skipped as visited.
+          guard !isExcluded(spelled + "/"),
             visited.insert(DirectoryIdentity(attributes: attributes, resolvedPath: resolved))
               .inserted
           else { continue }
