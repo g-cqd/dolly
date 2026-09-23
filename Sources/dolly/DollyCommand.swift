@@ -340,54 +340,30 @@ struct Analyze: AsyncParsableCommand {
     return .default
   }
 
-  /// Deterministic discovery: directories are walked recursively, skipping
-  /// build products and VCS internals. Every path — explicit file argument or
+  /// Deterministic discovery: directories are walked by `SourceDiscovery`,
+  /// which skips build products and VCS internals and keeps symlinks from
+  /// looping or leaving the directory. Every path — explicit file argument or
   /// walked entry — is normalized to absolute, because `Finding.path` feeds the
   /// fingerprint, and a fingerprint that depends on how the corpus was spelled
   /// on the command line makes baselines unusable across invocation styles.
   private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
-    let skippedComponents: Set<String> = [".build", ".git", "DerivedData", ".swiftpm", "checkouts"]
     var files: Set<String> = []
-    let manager = FileManager.default
-
     for path in paths {
       guard
         // Resolved first: attributesOfItem does not traverse a final symlink,
         // so a linked Sources/ would classify as a "file", degrade, and
         // exit 0 over zero analyzed code.
-        let attributes = try? manager.attributesOfItem(
+        let attributes = try? FileManager.default.attributesOfItem(
           atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
         let type = attributes[.type] as? FileAttributeType
       else {
         throw ValidationError("no such file or directory: \(path)")
       }
-      let isDirectory = type == .typeDirectory
-      if !isDirectory {
+      if type == .typeDirectory {
+        files.formUnion(
+          SourceDiscovery.swiftFiles(in: path, isExcluded: configuration.isExcluded(path:)))
+      } else {
         files.insert(URL(fileURLWithPath: path).path)
-        continue
-      }
-      // Absolute, matching what FileManager.enumerator(at:) produced:
-      // finding paths are part of the output contract.
-      var stack = [URL(fileURLWithPath: path).path]
-      while let directory = stack.popLast() {
-        guard let entries = try? manager.contentsOfDirectory(atPath: directory) else { continue }
-        for entry in entries {
-          // Matches the old enumerator's `.skipsHiddenFiles` plus the
-          // `skipDescendants()` prune: a skipped directory is never descended.
-          if entry.hasPrefix(".") { continue }
-          if skippedComponents.contains(entry) { continue }
-          let full = directory + "/" + entry
-          let entryType =
-            // Resolve so symlinked subtrees and files are walked too.
-            (try? manager.attributesOfItem(
-              atPath: URL(fileURLWithPath: full).resolvingSymlinksInPath().path))?[
-              .type] as? FileAttributeType
-          if entryType == .typeDirectory {
-            stack.append(full)
-          } else if full.hasSuffix(".swift"), !configuration.isExcluded(path: full) {
-            files.insert(full)
-          }
-        }
       }
     }
     return files.sorted()
