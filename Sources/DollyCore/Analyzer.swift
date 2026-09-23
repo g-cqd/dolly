@@ -81,7 +81,11 @@ public struct Analyzer: Sendable {
         return .degraded(
           .init(path: path, detail: "read failed or exceeds size cap: \(error)"))
       }
-      let source = String(decoding: data, as: UTF8.self)
+      // Swift sources are UTF-8. Repairing invalid bytes would analyze text
+      // that is not in the file, and hide the file from the degraded count.
+      guard let source = String(validating: data, as: UTF8.self) else {
+        return .degraded(.init(path: path, detail: "not valid UTF-8"))
+      }
 
       guard let cache else {
         return .prepared(Self.prepare(source: source, path: path), entry: nil, cached: false)
