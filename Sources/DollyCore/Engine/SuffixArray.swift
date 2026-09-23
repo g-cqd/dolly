@@ -27,10 +27,18 @@ struct SuffixArray<Index: SuffixArrayIndex>: Sendable {
   /// - Note: Token IDs should be in range [0, alphabetSize).
   /// - Precondition: `Index` holds `tokens.count` and the largest id plus one.
   init(tokens: [Index]) {
+    var tokens = tokens
+    self.init(borrowing: &tokens)
+  }
+
+  /// Builds while temporarily appending the SA-IS sentinel to the caller's
+  /// buffer. The input is restored before this initializer returns. A shared
+  /// array may still trigger copy-on-write when the sentinel is appended.
+  init(borrowing tokens: inout [Index]) {
     if tokens.isEmpty {
       array = []
     } else {
-      array = SuffixArrayBuilder.build(tokens)
+      array = SuffixArrayBuilder.build(&tokens)
     }
   }
 }
@@ -43,7 +51,7 @@ struct SuffixArray<Index: SuffixArrayIndex>: Sendable {
 /// Reference: Nong, Zhang, Chan - "Two Efficient Algorithms for Linear Time Suffix Array Construction" (2009)
 enum SuffixArrayBuilder {
   /// Build suffix array using SA-IS algorithm.
-  static func build<Index: SuffixArrayIndex>(_ input: [Index]) -> [Index] {
+  static func build<Index: SuffixArrayIndex>(_ input: inout [Index]) -> [Index] {
     let n = input.count
     guard n > 0 else { return [] }
 
@@ -56,11 +64,11 @@ enum SuffixArrayBuilder {
     let alphabetSize = Int(input.max() ?? 0) + 2  // +1 for max value, +1 for sentinel
 
     // Append sentinel (smaller than all other characters)
-    var text = input
-    text.append(0)  // Sentinel
+    input.append(0)  // Sentinel; caller reserved this slot.
+    defer { input.removeLast() }
 
     // Build suffix array using SA-IS
-    var sa = SAIS.build(text, alphabetSize: alphabetSize)
+    var sa = SAIS.build(input, alphabetSize: alphabetSize)
 
     // The sentinel is appended at position `n` and 0 is the smallest
     // character — SA-IS sorts that suffix to position 0. Drop it via
@@ -82,10 +90,8 @@ enum SuffixArrayBuilder {
 /// Implementation of the SA-IS (Suffix Array Induced Sorting) algorithm.
 /// Achieves O(n) time complexity for suffix array construction.
 ///
-/// The working `sa` buffer is a plain `[Index]` allocated per recursion level
-/// and mutated in place across the induced-sort phases; the second
-/// `placeLMSSuffixesOrdered` pass reuses the same buffer after an in-place
-/// reset.
+/// The working suffix array is reused across induction passes, and one bucket
+/// cursor is shared across recursion levels.
 enum SAIS {
   // MARK: Internal
 
@@ -96,6 +102,13 @@ enum SAIS {
   ///   - alphabetSize: Size of the alphabet (max value + 1).
   /// - Returns: Suffix array.
   static func build<Index: SuffixArrayIndex>(_ text: [Index], alphabetSize: Int) -> [Index] {
+    var bucketCursor: [Int] = []
+    return build(text, alphabetSize: alphabetSize, bucketCursor: &bucketCursor)
+  }
+
+  private static func build<Index: SuffixArrayIndex>(
+    _ text: [Index], alphabetSize: Int, bucketCursor: inout [Int]
+  ) -> [Index] {
     let n = text.count
     guard n > 1 else { return n == 1 ? [0] : [] }
 
@@ -115,6 +128,9 @@ enum SAIS {
     // this single buffer; the second induction pass reuses it via
     // in-place reset.
     var sa = [Index](repeating: -1, count: n)
+    if bucketCursor.count < alphabetSize {
+      bucketCursor.append(contentsOf: repeatElement(0, count: alphabetSize - bucketCursor.count))
+    }
 
     // First induction: LMS suffixes placed in text order. This sorts the
     // LMS *substrings* well enough to name them, but it does NOT sort the
@@ -122,7 +138,8 @@ enum SAIS {
     // is what yields the final suffix array and must ALWAYS run.
     placeAndInduce(
       into: &sa, text: text, types: types, lmsPositions: lmsPositions,
-      orderedBy: nil, bucketHeads: bucketHeads, bucketTails: bucketTails)
+      orderedBy: nil, bucketHeads: bucketHeads, bucketTails: bucketTails,
+      bucketCursor: &bucketCursor)
 
     // Assign names to the sorted LMS substrings, then form the reduced
     // string (one name per LMS position, in text order).
@@ -139,7 +156,7 @@ enum SAIS {
       if reducedString.count <= 32 {
         reducedSA = buildSimple(reducedString)
       } else {
-        reducedSA = build(reducedString, alphabetSize: name + 1)
+        reducedSA = build(reducedString, alphabetSize: name + 1, bucketCursor: &bucketCursor)
       }
     } else {
       // Every LMS substring is unique, so the LMS suffixes sort exactly by
@@ -158,7 +175,8 @@ enum SAIS {
     for index in 0..<n { sa[index] = -1 }
     placeAndInduce(
       into: &sa, text: text, types: types, lmsPositions: lmsPositions,
-      orderedBy: reducedSA, bucketHeads: bucketHeads, bucketTails: bucketTails)
+      orderedBy: reducedSA, bucketHeads: bucketHeads, bucketTails: bucketTails,
+      bucketCursor: &bucketCursor)
 
     return sa
   }
@@ -172,13 +190,17 @@ enum SAIS {
     lmsPositions: [Index],
     orderedBy reducedSA: [Index]?,
     bucketHeads: [Int],
-    bucketTails: [Int]
+    bucketTails: [Int],
+    bucketCursor: inout [Int]
   ) {
+    for i in bucketTails.indices { bucketCursor[i] = bucketTails[i] }
     placeLMSSuffixes(
       into: &sa, text: text, lmsPositions: lmsPositions,
-      orderedBy: reducedSA, bucketTails: bucketTails)
-    inducedSortLType(sa: &sa, text: text, types: types, bucketHeads: bucketHeads)
-    inducedSortSType(sa: &sa, text: text, types: types, bucketTails: bucketTails)
+      orderedBy: reducedSA, bucketCursor: &bucketCursor)
+    for i in bucketHeads.indices { bucketCursor[i] = bucketHeads[i] }
+    inducedSortLType(sa: &sa, text: text, types: types, bucketCursor: &bucketCursor)
+    for i in bucketTails.indices { bucketCursor[i] = bucketTails[i] }
+    inducedSortSType(sa: &sa, text: text, types: types, bucketCursor: &bucketCursor)
   }
 
   // MARK: Private
@@ -212,17 +234,17 @@ enum SAIS {
   private static func computeBucketBoundaries<Index: SuffixArrayIndex>(
     _ text: [Index], alphabetSize: Int
   ) -> (heads: [Int], tails: [Int]) {
-    var bucketSizes = [Int](repeating: 0, count: alphabetSize)
+    var heads = [Int](repeating: 0, count: alphabetSize)
     for c in text {
-      bucketSizes[Int(c)] += 1
+      heads[Int(c)] += 1
     }
 
-    var heads = [Int](repeating: 0, count: alphabetSize)
     var tails = [Int](repeating: 0, count: alphabetSize)
     var sum = 0
     for i in 0..<alphabetSize {
+      let count = heads[i]
       heads[i] = sum
-      sum += bucketSizes[i]
+      sum += count
       tails[i] = sum - 1
     }
     return (heads, tails)
@@ -236,14 +258,13 @@ enum SAIS {
     text: [Index],
     lmsPositions: [Index],
     orderedBy reducedSA: [Index]?,
-    bucketTails: [Int]
+    bucketCursor: inout [Int]
   ) {
-    var tails = bucketTails
     for i in stride(from: lmsPositions.count - 1, through: 0, by: -1) {
       let pos = lmsPositions[reducedSA.map { Int($0[i]) } ?? i]
       let c = Int(text[Int(pos)])
-      sa[tails[c]] = pos
-      tails[c] -= 1
+      sa[bucketCursor[c]] = pos
+      bucketCursor[c] -= 1
     }
   }
 
@@ -252,14 +273,13 @@ enum SAIS {
     sa: inout [Index],
     text: [Index],
     types: [Bool],
-    bucketHeads: [Int]
+    bucketCursor: inout [Int]
   ) {
-    var heads = bucketHeads
     for i in 0..<sa.count where sa[i] > 0 && !types[Int(sa[i]) - 1] {
       let j = sa[i] - 1
       let c = Int(text[Int(j)])
-      sa[heads[c]] = j
-      heads[c] += 1
+      sa[bucketCursor[c]] = j
+      bucketCursor[c] += 1
     }
   }
 
@@ -268,15 +288,14 @@ enum SAIS {
     sa: inout [Index],
     text: [Index],
     types: [Bool],
-    bucketTails: [Int]
+    bucketCursor: inout [Int]
   ) {
-    var tails = bucketTails
     for i in stride(from: sa.count - 1, through: 0, by: -1)
     where sa[i] > 0 && types[Int(sa[i]) - 1] {
       let j = sa[i] - 1
       let c = Int(text[Int(j)])
-      sa[tails[c]] = j
-      tails[c] -= 1
+      sa[bucketCursor[c]] = j
+      bucketCursor[c] -= 1
     }
   }
 

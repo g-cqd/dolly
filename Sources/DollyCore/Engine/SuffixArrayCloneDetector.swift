@@ -77,12 +77,14 @@ struct SuffixArrayCloneDetector: Sendable {
   private func findRepeatGroups<Index: SuffixArrayIndex>(
     in sequences: [TokenSequence], internCount: Int, lane: Lane, as index: Index.Type
   ) -> (groups: [RepeatGroup], refs: [StreamRef]) {
-    let (tokens, refs) = buildStream(
+    var (tokens, refs) = buildStream(
       sequences: sequences, internCount: internCount, lane: lane, as: Index.self)
     guard tokens.count >= minimumTokens else { return ([], refs) }
 
-    let suffixArray = SuffixArray(tokens: tokens)
+    let suffixArray = SuffixArray(borrowing: &tokens)
     let lcpArray = LCPArray(suffixArray: suffixArray, tokens: tokens)
+    // Repeat merging allocates a stream-sized coverage map.
+    tokens.removeAll(keepingCapacity: false)
     return (lcpArray.findRepeatGroups(minLength: minimumTokens), refs)
   }
 
@@ -114,7 +116,7 @@ struct SuffixArrayCloneDetector: Sendable {
     var tokens: [Index] = []
     var refs: [StreamRef] = []
     let capacity = Self.streamCapacity(of: sequences)
-    tokens.reserveCapacity(capacity)
+    tokens.reserveCapacity(capacity + 1)  // SA-IS appends one sentinel in place.
     refs.reserveCapacity(capacity)
 
     var nextSeparator = internCount + 1

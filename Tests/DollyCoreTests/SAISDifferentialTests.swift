@@ -101,6 +101,18 @@ import Testing
     }
   }
 
+  @Test("Borrowed suffix construction restores its input and matches the reference")
+  func borrowedInputIsRestored() {
+    var rng = LCG(state: 0xB0_2200)
+    for trial in 0..<200 {
+      let original = Self.corpusLikeStream(&rng, n: 33 + rng.next(400), alpha: 2 + rng.next(20))
+      var tokens = original
+      let result = SuffixArray(borrowing: &tokens)
+      #expect(tokens == original, "trial \(trial)")
+      #expect(result.array == Self.bruteForceSA(original), "trial \(trial)")
+    }
+  }
+
   @Test("Repeat groups never over-claim their shared token length")
   func repeatGroupsRespectTrueSharedPrefix() {
     var rng = LCG(state: 0x0BAD_F00D)
