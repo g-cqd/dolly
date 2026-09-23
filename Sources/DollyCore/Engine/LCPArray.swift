@@ -93,15 +93,19 @@ extension LCPArray {
   /// - Parameter minLength: Minimum length of repeats to find.
   /// - Returns: Array of repeat groups.
   func findRepeatGroups(minLength: Int) -> [RepeatGroup] {
+    Self.mergeOverlappingGroups(repeatRegions(minLength: minLength), streamLength: array.count)
+  }
+
+  /// One group per maximal run of LCP values of at least `minLength`, before
+  /// the shifted sub-repeats are merged away. Each suffix array slot lies in
+  /// at most one run, so the groups' positions are disjoint.
+  /// - Complexity: O(*n*) in the stream length.
+  func repeatRegions(minLength: Int) -> [RepeatGroup] {
     let sa = suffixArray.array
     let n = array.count
     guard n > 1 else { return [] }
 
     var groups: [RepeatGroup] = []
-
-    // Use a stack-based approach to find all repeat intervals
-    // This is more efficient for finding all maximal repeat groups
-
     var i = 1
     while i < n {
       if array[i] < minLength {
@@ -126,8 +130,7 @@ extension LCPArray {
 
       i = j
     }
-
-    return mergeOverlappingGroups(groups)
+    return groups
   }
 
   /// Merge groups that represent the same underlying repeat.
@@ -138,7 +141,20 @@ extension LCPArray {
   /// (the shifted positions differ), so redundancy is judged by token-
   /// range overlap: a group is dropped when every occurrence lies at
   /// least half inside some longer, already-kept occurrence.
-  private func mergeOverlappingGroups(_ groups: [RepeatGroup]) -> [RepeatGroup] {
+  ///
+  /// Groups are visited longest first, so a kept occurrence is never shorter
+  /// than the one being judged. Such a kept range overlaps a range by half or
+  /// more exactly when it contains the range's first half or its last half,
+  /// both rounded up. Recording, for each token, the furthest end of a kept
+  /// range that covers it answers that with two lookups per occurrence;
+  /// checking every kept range instead was quadratic on clone-heavy corpora.
+  /// - Precondition: every occurrence lies inside the stream: `position +
+  ///   length <= streamLength`.
+  /// - Complexity: O(*n* + *g* log *g* + *k*), for a stream of length *n*,
+  ///   *g* groups, and kept occurrences of total length *k*.
+  static func mergeOverlappingGroups(
+    _ groups: [RepeatGroup], streamLength: Int
+  ) -> [RepeatGroup] {
     guard !groups.isEmpty else { return [] }
 
     // Sort by length descending to prefer longer repeats; tie-break on
@@ -149,21 +165,25 @@ extension LCPArray {
     }
 
     var result: [RepeatGroup] = []
-    var claimed: [Range<Int>] = []  // Token-stream ranges of kept occurrences.
+    // coverEnd[token]: the furthest end of a kept occurrence covering token,
+    // or 0 when none does.
+    var coverEnd = [Int](repeating: 0, count: streamLength)
 
     for group in sorted {
-      let ranges = group.positions.map { $0..<($0 + group.length) }
-      let redundant = ranges.allSatisfy { range in
-        claimed.contains { existing in
-          let overlap =
-            min(range.upperBound, existing.upperBound)
-            - max(range.lowerBound, existing.lowerBound)
-          return overlap * 2 >= range.count
-        }
+      let length = group.length
+      // Overlapping `half` tokens is overlapping at least half the range.
+      let half = (length + 1) / 2
+      let redundant = group.positions.allSatisfy { start in
+        coverEnd[start] >= start + half || coverEnd[start + length - half] >= start + length
       }
       if redundant { continue }
       result.append(group)
-      claimed.append(contentsOf: ranges)
+      for start in group.positions {
+        let end = start + length
+        for token in start..<end where coverEnd[token] < end {
+          coverEnd[token] = end
+        }
+      }
     }
 
     return result
