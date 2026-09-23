@@ -99,15 +99,80 @@ import Testing
     let analyzer = Analyzer(cacheURL: cache)
     _ = await analyzer.analyze(files: files)
 
-    // Rewrite the payload with a bogus version.
+    // Rewrite the checked header with a bogus version.
     var text = try String(contentsOf: cache, encoding: .utf8)
     text = text.replacingOccurrences(
-      of: "\"version\":\"\(ToolInfo.version)\"", with: "\"version\":\"0.0.0-old\"")
+      of: "facts \(ToolInfo.version) ", with: "facts 0.0.0-old ")
     try text.write(to: cache, atomically: true, encoding: .utf8)
 
     let report = await analyzer.analyze(files: files)
     #expect(report.cacheHits == 0)
     #expect(report.cacheMisses == 2)
+  }
+
+  @Test("a cache written by another build is a miss at the same tool version")
+  func buildIdentityGate() async throws {
+    let (dir, cache, files) = try makeWorkspace()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let analyzer = Analyzer(cacheURL: cache)
+    _ = await analyzer.analyze(files: files)
+    let snapshot = FactsCache.load(url: cache)
+    #expect(snapshot.entries.count == 2)
+    snapshot.persist(url: cache, build: "another-build")
+
+    let rerun = await analyzer.analyze(files: files)
+    #expect(rerun.cacheHits == 0)
+    #expect(rerun.cacheMisses == 2)
+    #expect((await analyzer.analyze(files: files)).cacheHits == 2)
+  }
+
+  @Test(
+    "a change to rules or configuration invalidates cached facts",
+    arguments: [
+      Configuration(rules: [RuleID.structuralClone.rawValue: .init(enabled: false)]),
+      Configuration(duplication: .init(minimumTokens: 40)),
+      Configuration(exclude: ["never-matches-a-source"]),
+    ])
+  func configurationGate(configuration: Configuration) async throws {
+    let (dir, cache, files) = try makeWorkspace()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let original = Analyzer(cacheURL: cache)
+    _ = await original.analyze(files: files)
+
+    let changed = Analyzer(configuration: configuration, cacheURL: cache)
+    let rerun = await changed.analyze(files: files)
+    #expect(rerun.cacheHits == 0)
+    #expect(rerun.cacheMisses == 2)
+    #expect((await changed.analyze(files: files)).cacheHits == 2)
+  }
+
+  @Test("a matching cache header with malformed contents is a miss")
+  func malformedMatchingCache() async throws {
+    let (dir, cache, files) = try makeWorkspace()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let build = try #require(BuildIdentity.current)
+    let header = try #require(FactsCache.header(build: build, configuration: .default))
+    try Data("\(header)\n{ invalid json".utf8).write(to: cache)
+
+    let analyzer = Analyzer(cacheURL: cache)
+    let rerun = await analyzer.analyze(files: files)
+    #expect(rerun.cacheHits == 0)
+    #expect(rerun.cacheMisses == 2)
+    #expect((await analyzer.analyze(files: files)).cacheHits == 2)
+  }
+
+  @Test("Replacing an executable changes its cache identity")
+  func executableIdentityChanges() throws {
+    let dir = FileManager.default.temporaryDirectory
+      .appending(path: "dolly-build-id-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let executable = dir.appending(path: "tool")
+    try Data([1]).write(to: executable)
+    let before = try #require(BuildIdentity.identity(ofExecutableAt: executable.path))
+    try Data([1, 2]).write(to: executable)
+    let after = try #require(BuildIdentity.identity(ofExecutableAt: executable.path))
+    #expect(before != after)
   }
 
   @Test("entries for absent files are pruned on persist")

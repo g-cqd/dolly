@@ -1,18 +1,17 @@
 //  FactsCache.swift
-//  dolly — modeled on arcleak's FactsCache (fail-open, version-gated)
+//  dolly — fail-open, build- and configuration-gated facts cache
 //
 //  Per-file facts cache for the interned token pipeline. Parsing +
 //  extraction dominate runtime; detection is corpus-level and always
-//  re-runs, so only per-file extraction facts are cached — findings never
-//  go stale relative to engine or configuration changes.
+//  re-runs, so only per-file extraction facts are cached.
 //
 //  The cache is an optimization, so unlike configuration it FAILS OPEN: an
-//  unreadable, corrupt, or version-mismatched cache behaves as empty and is
-//  overwritten on persist. Entries are keyed by absolute path and validated
-//  by a content fingerprint (FNV-1a 64 over bytes + length — identity, not
+//  unreadable, corrupt, or identity-mismatched cache behaves as empty and is
+//  overwritten on persist. A text header rejects another version, build, or
+//  configuration before JSON decoding. Entries are keyed by absolute path and
+//  validated by a content fingerprint (FNV-1a 64 over bytes + length — identity, not
 //  security; a collision merely serves stale facts for one file until its
-//  next real change). A tool-version mismatch discards the whole cache, so
-//  a facts-schema change can never deserialize into wrong shapes.
+//  next real change).
 
 #if canImport(FoundationEssentials)
   import FoundationEssentials
@@ -132,8 +131,6 @@ struct FactsCache: Sendable {
   }
 
   private struct Payload: Codable {
-    var tool: String
-    var version: String
     var entries: [String: Entry]
   }
 
@@ -193,15 +190,29 @@ struct FactsCache: Sendable {
   /// JSON; the cap only guards against pathological files.
   static let maxCacheBytes = 256 * 1024 * 1024
 
+  /// A plain-text line checked before JSON decoding. It includes the tool
+  /// version, the executable identity, and the exact sorted configuration.
+  static func header(build: String, configuration: Configuration) -> String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let configurationData = try? encoder.encode(configuration) else { return nil }
+    return
+      "\(ToolInfo.name) facts \(ToolInfo.version) \(build) \(configurationData.base64EncodedString())"
+  }
+
   /// Fail-open load: any failure — unreadable, over-cap, corrupt JSON, or
-  /// a tool/version mismatch — returns an empty cache (the cache is an
-  /// optimization, never a trust boundary).
-  static func load(url: URL) -> FactsCache {
+  /// a tool, version, build or configuration mismatch — returns an empty
+  /// cache. The cache is an optimization, never a trust boundary.
+  static func load(
+    url: URL, build: String? = BuildIdentity.current, configuration: Configuration = .default
+  ) -> FactsCache {
     guard
+      let build,
+      let header = header(build: build, configuration: configuration),
       let data = try? BoundedFileReader.read(path: url.path, cap: maxCacheBytes),
-      let payload = try? JSONDecoder().decode(Payload.self, from: data),
-      payload.tool == ToolInfo.name,
-      payload.version == ToolInfo.version
+      data.starts(with: Data((header + "\n").utf8)),
+      let payload = try? JSONDecoder().decode(
+        Payload.self, from: data.dropFirst(header.utf8.count + 1))
     else {
       return FactsCache()
     }
@@ -210,11 +221,18 @@ struct FactsCache: Sendable {
 
   /// Best-effort persist: creates the directory, writes atomically, and
   /// swallows failures — a read-only cache location must never fail a run.
-  func persist(url: URL) {
-    let payload = Payload(tool: ToolInfo.name, version: ToolInfo.version, entries: entries)
+  func persist(
+    url: URL, build: String? = BuildIdentity.current, configuration: Configuration = .default
+  ) {
+    guard let build, let header = Self.header(build: build, configuration: configuration) else {
+      return
+    }
+    let payload = Payload(entries: entries)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    guard let data = try? encoder.encode(payload) else { return }
+    guard let body = try? encoder.encode(payload) else { return }
+    var data = Data((header + "\n").utf8)
+    data.append(body)
     try? FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),
       withIntermediateDirectories: true
