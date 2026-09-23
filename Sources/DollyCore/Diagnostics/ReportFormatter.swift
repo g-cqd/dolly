@@ -95,6 +95,8 @@ public enum ReportFormatter {
     /// The absolute URI of ``ArtifactURI/baseID``, which relative uris
     /// resolve against (nil without a root — optionals are omitted).
     let originalUriBaseIds: [String: SarifArtifactLocation]?
+    /// The unit every region's columns count in; see ``UTF16Columns``.
+    let columnKind = "utf16CodeUnits"
     let results: [SarifResult]
   }
 
@@ -170,6 +172,14 @@ public enum ReportFormatter {
   /// - Parameter root: the canonical directory the report's relative paths
   ///   hang from, or nil when every path is absolute.
   private static func sarif(_ report: AnalysisReport, root: String?) -> String {
+    var columns = UTF16Columns(root: root)
+    /// Where a finding or a related location points, its column in UTF-16.
+    func physicalLocation(path: String, line: Int, column: Int) -> SarifPhysicalLocation {
+      SarifPhysicalLocation(
+        artifactLocation: SarifArtifactLocation(path: path, root: root),
+        region: SarifRegion(
+          startLine: line, startColumn: columns.column(column, line: line, path: path)))
+    }
     let results = report.findings.map { finding in
       SarifResult(
         ruleId: finding.rule.rawValue,
@@ -179,23 +189,15 @@ public enum ReportFormatter {
         ),
         locations: [
           SarifLocation(
-            physicalLocation: SarifPhysicalLocation(
-              artifactLocation: SarifArtifactLocation(path: finding.path, root: root),
-              region: SarifRegion(
-                startLine: finding.line,
-                startColumn: finding.column
-              )
-            )
-          )
+            physicalLocation: physicalLocation(
+              path: finding.path, line: finding.line, column: finding.column))
         ],
         relatedLocations: finding.related.isEmpty
           ? nil
           : finding.related.map { member in
             SarifLocation(
-              physicalLocation: SarifPhysicalLocation(
-                artifactLocation: SarifArtifactLocation(path: member.path, root: root),
-                region: SarifRegion(startLine: member.line, startColumn: member.column)
-              ),
+              physicalLocation: physicalLocation(
+                path: member.path, line: member.line, column: member.column),
               message: SarifText(text: "duplicate region")
             )
           },
