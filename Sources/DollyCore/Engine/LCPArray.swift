@@ -8,7 +8,7 @@
 /// The LCP array `lcp[i]` contains the length of the longest common prefix
 /// between `suffixArray[i-1]` and `suffixArray[i]`. This enables finding
 /// all repeated substrings by scanning for values >= threshold.
-struct LCPArray: Sendable {
+struct LCPArray<Index: SuffixArrayIndex>: Sendable {
   // MARK: Lifecycle
 
   /// Creates an LCP array from a suffix array and the original tokens.
@@ -18,7 +18,7 @@ struct LCPArray: Sendable {
   /// - Parameters:
   ///   - suffixArray: The suffix array.
   ///   - tokens: The original token array (as integers).
-  init(suffixArray: SuffixArray, tokens: [Int]) {
+  init(suffixArray: SuffixArray<Index>, tokens: [Index]) {
     self.suffixArray = suffixArray
     array = LCPArrayBuilder.build(suffixArray: suffixArray, tokens: tokens)
   }
@@ -26,10 +26,10 @@ struct LCPArray: Sendable {
   // MARK: Public
 
   /// The LCP values. `lcp[i]` = LCP of SA[i-1] and SA[i]. lcp[0] is always 0.
-  let array: [Int]
+  let array: [Index]
 
   /// The suffix array this LCP array corresponds to.
-  let suffixArray: SuffixArray
+  let suffixArray: SuffixArray<Index>
 }
 
 // MARK: - LCPArrayBuilder
@@ -41,7 +41,9 @@ struct LCPArray: Sendable {
 /// the next suffix in text order.
 enum LCPArrayBuilder {
   /// Build LCP array using Kasai's algorithm.
-  static func build(suffixArray: SuffixArray, tokens: [Int]) -> [Int] {
+  static func build<Index: SuffixArrayIndex>(
+    suffixArray: SuffixArray<Index>, tokens: [Index]
+  ) -> [Index] {
     let n = tokens.count
     guard n > 0 else { return [] }
     guard suffixArray.array.count == n else { return [] }
@@ -50,28 +52,28 @@ enum LCPArrayBuilder {
 
     // Build inverse suffix array (rank array)
     // rank[i] = position of suffix starting at i in the sorted suffix array
-    var rank = [Int](repeating: 0, count: n)
+    var rank = [Index](repeating: 0, count: n)
     for i in 0..<n {
-      rank[sa[i]] = i
+      rank[Int(sa[i])] = Index(i)
     }
 
     // Build LCP array using Kasai's algorithm
-    var lcp = [Int](repeating: 0, count: n)
+    var lcp = [Index](repeating: 0, count: n)
     var h = 0  // Current LCP length
 
     for i in 0..<n {
-      let r = rank[i]  // Position of suffix[i] in SA
+      let r = Int(rank[i])  // Position of suffix[i] in SA
 
       if r > 0 {
         // Get the suffix that comes just before in sorted order
-        let j = sa[r - 1]
+        let j = Int(sa[r - 1])
 
         // Compare suffix[i] and suffix[j] starting from position h
         while i + h < n, j + h < n, tokens[i + h] == tokens[j + h] {
           h += 1
         }
 
-        lcp[r] = h
+        lcp[r] = Index(h)
 
         // Key insight: LCP can decrease by at most 1
         if h > 0 {
@@ -108,20 +110,20 @@ extension LCPArray {
     var groups: [RepeatGroup] = []
     var i = 1
     while i < n {
-      if array[i] < minLength {
+      if Int(array[i]) < minLength {
         i += 1
         continue
       }
 
       // Found start of a repeat region
-      var positions: [Int] = [sa[i - 1], sa[i]]
-      var minLcp = array[i]
+      var positions: [Int] = [Int(sa[i - 1]), Int(sa[i])]
+      var minLcp = Int(array[i])
       var j = i + 1
 
       // Extend while in same or higher LCP region
-      while j < n, array[j] >= minLength {
-        positions.append(sa[j])
-        minLcp = min(minLcp, array[j])
+      while j < n, Int(array[j]) >= minLength {
+        positions.append(Int(sa[j]))
+        minLcp = min(minLcp, Int(array[j]))
         j += 1
       }
 
@@ -149,7 +151,7 @@ extension LCPArray {
   /// range that covers it answers that with two lookups per occurrence;
   /// checking every kept range instead was quadratic on clone-heavy corpora.
   /// - Precondition: every occurrence lies inside the stream: `position +
-  ///   length <= streamLength`.
+  ///   length <= streamLength`, which `Index` holds.
   /// - Complexity: O(*n* + *g* log *g* + *k*), for a stream of length *n*,
   ///   *g* groups, and kept occurrences of total length *k*.
   static func mergeOverlappingGroups(
@@ -167,20 +169,21 @@ extension LCPArray {
     var result: [RepeatGroup] = []
     // coverEnd[token]: the furthest end of a kept occurrence covering token,
     // or 0 when none does.
-    var coverEnd = [Int](repeating: 0, count: streamLength)
+    var coverEnd = [Index](repeating: 0, count: streamLength)
 
     for group in sorted {
       let length = group.length
       // Overlapping `half` tokens is overlapping at least half the range.
       let half = (length + 1) / 2
       let redundant = group.positions.allSatisfy { start in
-        coverEnd[start] >= start + half || coverEnd[start + length - half] >= start + length
+        Int(coverEnd[start]) >= start + half
+          || Int(coverEnd[start + length - half]) >= start + length
       }
       if redundant { continue }
       result.append(group)
       for start in group.positions {
-        let end = start + length
-        for token in start..<end where coverEnd[token] < end {
+        let end = Index(start + length)
+        for token in start..<(start + length) where coverEnd[token] < end {
           coverEnd[token] = end
         }
       }

@@ -65,7 +65,7 @@ import Testing
       groups.append(RepeatGroup(positions: positions, length: length))
     }
 
-    let merged = LCPArray.mergeOverlappingGroups(groups, streamLength: streamLength)
+    let merged = LCPArray<Int32>.mergeOverlappingGroups(groups, streamLength: streamLength)
     #expect(Self.summary(merged) == Self.summary(Self.referenceMerge(groups)))
   }
 

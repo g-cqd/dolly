@@ -77,6 +77,30 @@ import Testing
     }
   }
 
+  /// The detector stores the stream in 32 bits whenever it fits, so the
+  /// narrow arrays and the groups found in them must be exactly the wide ones.
+  @Test("32-bit suffix, LCP and repeat groups equal the 64-bit ones")
+  func narrowIndicesMatchWide() {
+    var rng = LCG(state: 0x3232_6464)
+    for trial in 0..<300 {
+      let n = 33 + rng.next(2_000)  // long enough to recurse on the reduced string
+      let alpha = 1 + rng.next(35)
+      let wide = Self.corpusLikeStream(&rng, n: n, alpha: alpha)
+      let narrow = wide.map { Int32($0) }
+
+      let wideLCP = LCPArray(suffixArray: SuffixArray(tokens: wide), tokens: wide)
+      let narrowLCP = LCPArray(suffixArray: SuffixArray(tokens: narrow), tokens: narrow)
+      let sameArrays =
+        narrowLCP.suffixArray.array.map(Int.init) == wideLCP.suffixArray.array
+        && narrowLCP.array.map(Int.init) == wideLCP.array
+      let sameGroups =
+        narrowLCP.findRepeatGroups(minLength: 5).map { "\($0.length)@\($0.positions)" }
+        == wideLCP.findRepeatGroups(minLength: 5).map { "\($0.length)@\($0.positions)" }
+      #expect(sameArrays && sameGroups, "trial \(trial) n=\(n) alpha=\(alpha)")
+      if !(sameArrays && sameGroups) { return }  // one dump is enough
+    }
+  }
+
   @Test("Repeat groups never over-claim their shared token length")
   func repeatGroupsRespectTrueSharedPrefix() {
     var rng = LCG(state: 0x0BAD_F00D)

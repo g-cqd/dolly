@@ -52,13 +52,15 @@ struct SuffixArrayCloneDetector: Sendable {
     let sequences = corpus.sequences.filter { !$0.hasSourceLocationDirective }
     guard !sequences.isEmpty else { return [] }
 
-    let (tokens, refs) = buildStream(
-      sequences: sequences, internCount: corpus.strings.count, lane: lane)
-    guard tokens.count >= minimumTokens else { return [] }
-
-    let suffixArray = SuffixArray(tokens: tokens)
-    let lcpArray = LCPArray(suffixArray: suffixArray, tokens: tokens)
-    let repeatGroups = lcpArray.findRepeatGroups(minLength: minimumTokens)
+    // Ids run up to the intern count plus one separator per boundary or file,
+    // and positions up to the stream length plus SA-IS's sentinel. When both
+    // fit in 32 bits, as they do below two billion tokens, every array as
+    // long as the stream is half the size it would be as `Int`.
+    let internCount = corpus.strings.count
+    let (repeatGroups, refs) =
+      Self.streamCapacity(of: sequences) + internCount + 2 <= Int(Int32.max)
+      ? findRepeatGroups(in: sequences, internCount: internCount, lane: lane, as: Int32.self)
+      : findRepeatGroups(in: sequences, internCount: internCount, lane: lane, as: Int.self)
 
     return buildCloneGroups(
       repeatGroups: repeatGroups,
@@ -67,6 +69,21 @@ struct SuffixArrayCloneDetector: Sendable {
       strings: corpus.strings,
       cloneType: cloneType
     )
+  }
+
+  /// The merged repeat groups of the stream built from `sequences`, and the
+  /// stream's position map, with every array as long as the stream stored as
+  /// `Index`.
+  private func findRepeatGroups<Index: SuffixArrayIndex>(
+    in sequences: [TokenSequence], internCount: Int, lane: Lane, as index: Index.Type
+  ) -> (groups: [RepeatGroup], refs: [StreamRef]) {
+    let (tokens, refs) = buildStream(
+      sequences: sequences, internCount: internCount, lane: lane, as: Index.self)
+    guard tokens.count >= minimumTokens else { return ([], refs) }
+
+    let suffixArray = SuffixArray(tokens: tokens)
+    let lcpArray = LCPArray(suffixArray: suffixArray, tokens: tokens)
+    return (lcpArray.findRepeatGroups(minLength: minimumTokens), refs)
   }
 
   // MARK: - Stream Building
@@ -91,18 +108,18 @@ struct SuffixArrayCloneDetector: Sendable {
   /// reduces the survivor to a single location and the group is dropped.
   /// Periodic content inside ONE declaration still self-overlaps and is
   /// still filtered — that protection is intentional and unchanged.
-  private func buildStream(
-    sequences: [TokenSequence], internCount: Int, lane: Lane
-  ) -> ([Int], [StreamRef]) {
-    var tokens: [Int] = []
+  private func buildStream<Index: SuffixArrayIndex>(
+    sequences: [TokenSequence], internCount: Int, lane: Lane, as index: Index.Type
+  ) -> ([Index], [StreamRef]) {
+    var tokens: [Index] = []
     var refs: [StreamRef] = []
-    let capacity = sequences.reduce(0) { $0 + $1.records.count + $1.boundaries.count + 1 }
+    let capacity = Self.streamCapacity(of: sequences)
     tokens.reserveCapacity(capacity)
     refs.reserveCapacity(capacity)
 
     var nextSeparator = internCount + 1
     func appendSeparator(fileIndex: Int32) {
-      tokens.append(nextSeparator)
+      tokens.append(Index(nextSeparator))
       nextSeparator += 1
       refs.append(StreamRef(fileIndex: fileIndex, tokenIndex: -1))
     }
@@ -125,7 +142,7 @@ struct SuffixArrayCloneDetector: Sendable {
         }
 
         let id = lane == .raw ? record.rawID : record.normID
-        tokens.append(Int(id) + 1)
+        tokens.append(Index(id) + 1)
         refs.append(StreamRef(fileIndex: fi, tokenIndex: Int32(tokenIdx)))
       }
 
@@ -134,6 +151,12 @@ struct SuffixArrayCloneDetector: Sendable {
     }
 
     return (tokens, refs)
+  }
+
+  /// An upper bound on the stream's length: every token, plus a separator
+  /// per declaration boundary and one per file.
+  private static func streamCapacity(of sequences: [TokenSequence]) -> Int {
+    sequences.reduce(0) { $0 + $1.records.count + $1.boundaries.count + 1 }
   }
 
   // MARK: - Clone Group Conversion
