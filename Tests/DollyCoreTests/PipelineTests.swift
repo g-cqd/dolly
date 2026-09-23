@@ -10,8 +10,9 @@ import Testing
   }
 
   @Test func unknownConfigRuleFailsClosed() throws {
-    let path = FileManager.default.temporaryDirectory
-      .appending(path: "dolly-cfg-\(UUID().uuidString).json").path
+    let scratch = try TemporaryTestDirectory(prefix: "dolly-cfg")
+    defer { withExtendedLifetime(scratch) {} }
+    let path = scratch.url.appending(path: "config.json").path
     try #"{"rules": {"no-such-rule": {}}, "exclude": []}"#
       .write(toFile: path, atomically: true, encoding: .utf8)
     #expect(throws: DollyError.self) {
@@ -20,10 +21,9 @@ import Testing
   }
 
   @Test func oversizedFileDegradesNotCrashes() async throws {
-    let dir = FileManager.default.temporaryDirectory
-      .appending(path: "dolly-big-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    let big = dir.appending(path: "Big.swift")
+    let scratch = try TemporaryTestDirectory(prefix: "dolly-big")
+    defer { withExtendedLifetime(scratch) {} }
+    let big = scratch.url.appending(path: "Big.swift")
     #expect(FileManager.default.createFile(atPath: big.path, contents: nil))
     let handle = try FileHandle(forWritingTo: big)
     try handle.truncate(atOffset: UInt64(Analyzer.sourceByteCap) + 1)
@@ -57,11 +57,12 @@ import Testing
   }
 
   @Test func baselineRoundTrips() throws {
+    let scratch = try TemporaryTestDirectory(prefix: "dolly-bl")
+    defer { withExtendedLifetime(scratch) {} }
     let finding = Finding(
-      rule: RuleID.allCases.first!, severity: .warning,
+      rule: try #require(RuleID.allCases.first), severity: .warning,
       path: "a.swift", line: 1, column: 1, message: "m")
-    let path = FileManager.default.temporaryDirectory
-      .appending(path: "dolly-bl-\(UUID().uuidString).json").path
+    let path = scratch.url.appending(path: "baseline.json").path
     try Baseline(findings: [finding]).write(path: path)
     let loaded = try Baseline.load(path: path)
     #expect(loaded.contains(finding))
