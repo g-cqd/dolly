@@ -30,21 +30,6 @@ struct LCPArray: Sendable {
 
   /// The suffix array this LCP array corresponds to.
   let suffixArray: SuffixArray
-
-  /// Get the LCP value at index i.
-  subscript(i: Int) -> Int {
-    array[i]
-  }
-
-  /// Find all positions where LCP >= threshold.
-  /// These represent repeated substrings of at least `threshold` tokens.
-  func findRepeatsAboveThreshold(_ threshold: Int) -> [Int] {
-    var positions: [Int] = []
-    for i in 1..<array.count where array[i] >= threshold {
-      positions.append(i)
-    }
-    return positions
-  }
 }
 
 // MARK: - LCPArrayBuilder
@@ -99,105 +84,7 @@ enum LCPArrayBuilder {
   }
 }
 
-// MARK: - DetectedRepeat
-
-/// A detected repeat (clone candidate) from LCP array analysis.
-struct DetectedRepeat: Sendable, Hashable {
-  // MARK: Lifecycle
-
-  init(positions: [Int], length: Int) {
-    self.positions = positions.sorted()
-    self.length = length
-  }
-
-  // MARK: Public
-
-  /// Starting positions of all occurrences in the original token array.
-  let positions: [Int]
-
-  /// Length of the repeated substring (in tokens).
-  let length: Int
-
-  /// Number of occurrences.
-  var occurrences: Int { positions.count }
-}
-
 extension LCPArray {
-  /// Find all maximal repeats of at least `minLength` tokens.
-  ///
-  /// A maximal repeat is a substring that:
-  /// 1. Occurs at least twice
-  /// 2. Cannot be extended in either direction without reducing occurrences
-  ///
-  /// - Parameter minLength: Minimum length of repeats to find.
-  /// - Returns: Array of detected repeats.
-  func findMaximalRepeats(minLength: Int) -> [DetectedRepeat] {
-    guard array.count > 1 else { return [] }
-
-    var repeats: [DetectedRepeat] = []
-    let sa = suffixArray.array
-
-    // Find contiguous regions in LCP array with values >= minLength
-    var i = 1
-    while i < array.count {
-      if array[i] >= minLength {
-        // Start of a region
-        let regionStart = i - 1
-        var regionEnd = i
-        var minLcp = array[i]
-
-        // Extend region while LCP stays >= minLength
-        while regionEnd + 1 < array.count, array[regionEnd + 1] >= minLength {
-          regionEnd += 1
-          minLcp = min(minLcp, array[regionEnd])
-        }
-
-        // Collect all positions in this region
-        var positions: [Int] = []
-        for j in regionStart...regionEnd {
-          positions.append(sa[j])
-        }
-
-        // The repeat length is the minimum LCP in the region
-        if positions.count >= 2 {
-          repeats.append(DetectedRepeat(positions: positions, length: minLcp))
-        }
-
-        i = regionEnd + 1
-      } else {
-        i += 1
-      }
-    }
-
-    // Merge overlapping repeats and filter to maximal ones
-    return filterToMaximalRepeats(repeats, minLength: minLength)
-  }
-
-  /// Filter repeats to only include maximal ones.
-  private func filterToMaximalRepeats(_ repeats: [DetectedRepeat], minLength: Int)
-    -> [DetectedRepeat]
-  {
-    guard !repeats.isEmpty else { return [] }
-
-    // Group by position sets
-    var uniqueRepeats: [Set<Int>: DetectedRepeat] = [:]
-
-    for rep in repeats {
-      let posSet = Set(rep.positions)
-
-      if let existing = uniqueRepeats[posSet] {
-        // Keep the longer one
-        if rep.length > existing.length {
-          uniqueRepeats[posSet] = rep
-        }
-      } else {
-        uniqueRepeats[posSet] = rep
-      }
-    }
-
-    return Array(uniqueRepeats.values)
-  }
-
   /// Find all repeat groups with enhanced position information.
   ///
   /// This groups repeats that share positions into clone groups,
@@ -235,12 +122,7 @@ extension LCPArray {
       }
 
       // Create group with the minimum LCP as the shared length
-      let group = RepeatGroup(
-        positions: positions,
-        length: minLcp,
-        suffixArrayIndices: Array((i - 1)..<j),
-      )
-      groups.append(group)
+      groups.append(RepeatGroup(positions: positions, length: minLcp))
 
       i = j
     }
@@ -294,10 +176,9 @@ extension LCPArray {
 struct RepeatGroup: Sendable {
   // MARK: Lifecycle
 
-  init(positions: [Int], length: Int, suffixArrayIndices: [Int]) {
+  init(positions: [Int], length: Int) {
     self.positions = positions.sorted()
     self.length = length
-    self.suffixArrayIndices = suffixArrayIndices
   }
 
   // MARK: Public
@@ -307,9 +188,6 @@ struct RepeatGroup: Sendable {
 
   /// Length of the common repeated substring.
   let length: Int
-
-  /// Indices in the suffix array where these positions appear.
-  let suffixArrayIndices: [Int]
 
   /// Number of occurrences.
   var occurrences: Int { positions.count }
