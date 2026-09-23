@@ -82,7 +82,8 @@ struct Analyze: AsyncParsableCommand {
     help: ArgumentHelp(
       "Report paths relative to this directory. Makes fingerprints (and so baselines) and SARIF "
         + "uris independent of where the repository is checked out; GitHub code scanning also "
-        + "requires repo-relative uris to link findings. Use `--relative-to .` in CI."))
+        + "requires repo-relative uris to link findings. SARIF declares the directory as the "
+        + "uriBaseId SRCROOT. Use `--relative-to .` in CI."))
   var relativeTo: String?
 
   @Flag(name: .long, help: "Disable the facts cache for this run.")
@@ -197,7 +198,7 @@ struct Analyze: AsyncParsableCommand {
       baselinedCount = baselined.count
     }
 
-    let output = ReportFormatter.format(report, as: format)
+    let output = ReportFormatter.format(report, as: format, relativeTo: relativeTo)
     if !output.isEmpty {
       print(output)
     }
