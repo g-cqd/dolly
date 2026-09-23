@@ -24,6 +24,39 @@ import Testing
     }
     """
 
+  // MARK: - Exit status
+
+  @Test("A run that skipped every file prints its report, then exits 70")
+  func everyFileSkippedPrintsItsReport() throws {
+    let root = try Workspace.make([:])
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try Data([0x6C, 0x65, 0x74, 0x20, 0xFF]).write(to: root.appending(path: "Bad.swift"))
+    let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+    #expect(run.status == 70)
+    let log = try JSONDecoder().decode(SarifLog.self, from: run.standardOutput)
+    #expect(log.results.map(\.ruleId) == ["dolly/degraded-file"])
+    #expect(log.artifactLocations.map(\.uri) == ["Bad.swift"])
+    let invocation = try #require(log.runs.first?.invocations?.first)
+    #expect(!invocation.executionSuccessful)
+    #expect(invocation.toolExecutionNotifications?.map(\.level) == ["error"])
+  }
+
+  @Test("A run that analyzed its files records a successful invocation")
+  func analyzedRunSucceeds() throws {
+    let root = try Workspace.make(["Sources/A.swift": Self.clone, "Sources/B.swift": Self.clone])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let run = try BuiltTool.analyze(root.path, relativeTo: root.path, in: root)
+
+    #expect(run.status == 0)
+    let invocation = try #require(
+      try JSONDecoder().decode(SarifLog.self, from: run.standardOutput).runs.first?.invocations?
+        .first)
+    #expect(invocation.executionSuccessful)
+    #expect(invocation.toolExecutionNotifications == nil)
+  }
+
   // MARK: - SARIF regions
 
   @Test("SARIF columns count UTF-16 code units, and the run says so")
@@ -170,20 +203,35 @@ enum BuiltTool {
     return nil
   }()
 
+  /// What one run of the executable produced.
+  struct Run {
+    let status: Int32
+    let standardOutput: Data
+  }
+
   /// The SARIF log `dolly analyze` prints for `analyzed`, relativized to `base`
   /// when one is given, run from `directory` with the facts cache off.
   static func sarif(
     analyzing analyzed: String, relativeTo base: String?, in directory: URL
   ) throws -> SarifLog {
-    var arguments = ["analyze", analyzed, "--format", "sarif", "--no-cache"]
-    if let base { arguments += ["--relative-to", base] }
-    return try JSONDecoder().decode(SarifLog.self, from: run(arguments, in: directory))
+    try JSONDecoder().decode(
+      SarifLog.self,
+      from: analyze(analyzed, relativeTo: base, in: directory).standardOutput)
   }
 
-  /// Standard output of the executable. Output goes to a file rather than a
-  /// pipe, so a large report cannot fill a pipe buffer and stall the child
-  /// while the test waits for it to exit.
-  static func run(_ arguments: [String], in directory: URL) throws -> Data {
+  /// `dolly analyze` with SARIF output and the facts cache off.
+  static func analyze(_ analyzed: String, relativeTo base: String?, in directory: URL) throws
+    -> Run
+  {
+    var arguments = ["analyze", analyzed, "--format", "sarif", "--no-cache"]
+    if let base { arguments += ["--relative-to", base] }
+    return try run(arguments, in: directory)
+  }
+
+  /// The executable's exit status and standard output. Output goes to a file
+  /// rather than a pipe, so a large report cannot fill a pipe buffer and stall
+  /// the child while the test waits for it to exit.
+  static func run(_ arguments: [String], in directory: URL) throws -> Run {
     let executable = try #require(
       executable,
       "no dolly executable near \(Bundle.module.bundleURL.path); build the package first")
@@ -204,7 +252,7 @@ enum BuiltTool {
     try process.run()
     process.waitUntilExit()
     try output.close()
-    return try Data(contentsOf: outputURL)
+    return Run(status: process.terminationStatus, standardOutput: try Data(contentsOf: outputURL))
   }
 }
 
@@ -266,8 +314,19 @@ enum Workspace {
 struct SarifLog: Decodable {
   struct Run: Decodable {
     let columnKind: String?
+    let invocations: [Invocation]?
     let originalUriBaseIds: [String: ArtifactLocation]?
     let results: [Result]
+  }
+
+  struct Invocation: Decodable {
+    let executionSuccessful: Bool
+    let toolExecutionNotifications: [Notification]?
+  }
+
+  struct Notification: Decodable {
+    let level: String
+    let message: Message
   }
 
   struct Result: Decodable {
