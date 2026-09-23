@@ -46,54 +46,44 @@ enum ParallelProcessor {
   /// fast items don't sit idle waiting for a slow neighbour to finish
   /// its chunk.
   ///
-  /// The error type is generic: with a non-throwing `operation` the call
-  /// is itself non-throwing (`Failure == Never`), so callers don't pay a
-  /// dead `try`/`catch` for infallible work.
-  ///
   /// - Parameters:
   ///   - items: Items to process.
-  ///   - maxConcurrency: Maximum concurrent tasks.
+  ///   - maxConcurrency: Maximum concurrent tasks; below 1 counts as 1.
   ///   - operation: Async operation to perform on each item.
   /// - Returns: Array of results in same order as input.
-  static func map<T: Sendable, R: Sendable, Failure: Error>(
+  static func map<T: Sendable, R: Sendable>(
     _ items: [T],
     maxConcurrency: Int,
-    operation: @Sendable @escaping (T) async throws(Failure) -> R
-  ) async throws(Failure) -> [R] {
+    operation: @Sendable @escaping (T) async -> R
+  ) async -> [R] {
     guard !items.isEmpty else { return [] }
     let cap = max(1, maxConcurrency)
 
-    do {
-      return try await withThrowingTaskGroup(of: (Int, R).self) { group in
-        var iterator = items.enumerated().makeIterator()
-        var inFlight = 0
+    return await withTaskGroup(of: (Int, R).self) { group in
+      var iterator = items.enumerated().makeIterator()
+      var inFlight = 0
 
-        // Prime up to the concurrency cap.
-        while inFlight < cap, let next = iterator.next() {
+      // Prime up to the concurrency cap.
+      while inFlight < cap, let next = iterator.next() {
+        let (index, item) = next
+        group.addTask { (index, await operation(item)) }
+        inFlight += 1
+      }
+
+      // Drain completions, replacing each finished slot with the
+      // next pending item. Order-preserving via `index`.
+      var indexedResults: [(Int, R)] = []
+      indexedResults.reserveCapacity(items.count)
+      while let result = await group.next() {
+        indexedResults.append(result)
+        inFlight -= 1
+        if let next = iterator.next() {
           let (index, item) = next
-          group.addTask { (index, try await operation(item)) }
+          group.addTask { (index, await operation(item)) }
           inFlight += 1
         }
-
-        // Drain completions, replacing each finished slot with the
-        // next pending item. Order-preserving via `index`.
-        var indexedResults: [(Int, R)] = []
-        indexedResults.reserveCapacity(items.count)
-        while let result = try await group.next() {
-          indexedResults.append(result)
-          inFlight -= 1
-          if let next = iterator.next() {
-            let (index, item) = next
-            group.addTask { (index, try await operation(item)) }
-            inFlight += 1
-          }
-        }
-        return indexedResults.sorted { $0.0 < $1.0 }.map(\.1)
       }
-    } catch {
-      // The untyped task group can only rethrow `operation` errors,
-      // so the cast back to the typed failure always succeeds.
-      throw error as! Failure
+      return indexedResults.sorted { $0.0 < $1.0 }.map(\.1)
     }
   }
 }
