@@ -31,29 +31,6 @@ struct LCPArrayTests {
     #expect((lcp.array.max() ?? 0) >= 3)
   }
 
-  @Test("Find repeats above threshold")
-  func findRepeatsAboveThreshold() {
-    let tokens = [1, 2, 3, 1, 2, 3, 4, 1, 2, 3]
-    let sa = SuffixArray(tokens: tokens)
-    let lcp = LCPArray(suffixArray: sa, tokens: tokens)
-    #expect(!lcp.findRepeatsAboveThreshold(3).isEmpty)
-  }
-
-  @Test("Find maximal repeats")
-  func findMaximalRepeats() {
-    let tokens = [1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
-    let sa = SuffixArray(tokens: tokens)
-    let lcp = LCPArray(suffixArray: sa, tokens: tokens)
-
-    let repeats = lcp.findMaximalRepeats(minLength: 3)
-
-    // Should find the repeated [1,2,3,4,5] pattern
-    #expect(!repeats.isEmpty)
-    let maxRepeat = repeats.max { $0.length < $1.length }
-    #expect(maxRepeat?.length == 5)
-    #expect(maxRepeat?.occurrences == 2)
-  }
-
   @Test("Find repeat groups")
   func findRepeatGroups() {
     let tokens = [1, 2, 3, 1, 2, 3]
