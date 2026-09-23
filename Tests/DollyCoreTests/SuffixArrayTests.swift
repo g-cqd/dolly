@@ -84,7 +84,7 @@ struct SAISCorrectnessTests {
 struct SuffixArrayConstructionTests {
   @Test("Empty input produces empty suffix array")
   func emptyInput() {
-    let sa = SuffixArray(tokens: [])
+    let sa = SuffixArray<Int>(tokens: [])
     #expect(sa.array.isEmpty)
   }
 

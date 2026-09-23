@@ -9,7 +9,7 @@ import Testing
 struct LCPArrayTests {
   @Test("Empty LCP array")
   func emptyLCP() {
-    let sa = SuffixArray(tokens: [])
+    let sa = SuffixArray<Int>(tokens: [])
     let lcp = LCPArray(suffixArray: sa, tokens: [])
     #expect(lcp.array.isEmpty)
   }
