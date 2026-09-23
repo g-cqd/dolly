@@ -12,25 +12,16 @@ struct SuffixArray: Sendable {
   /// The suffix array - indices of sorted suffixes.
   let array: [Int]
 
-  /// The original input length.
-  let length: Int
-
   /// Creates a suffix array from an array of integers (token IDs).
   ///
   /// - Parameter tokens: Array of integer token IDs.
   /// - Note: Token IDs should be in range [0, alphabetSize).
   init(tokens: [Int]) {
-    length = tokens.count
     if tokens.isEmpty {
       array = []
     } else {
       array = SuffixArrayBuilder.build(tokens)
     }
-  }
-
-  /// Get the suffix starting at the i-th position in sorted order.
-  subscript(i: Int) -> Int {
-    array[i]
   }
 }
 
@@ -357,70 +348,5 @@ enum SAIS {
       return pi >= n  // Shorter suffix comes first
     }
     return sa
-  }
-}
-
-// MARK: - Suffix Array Utilities
-
-extension SuffixArray {
-  /// Binary search for a pattern in the suffix array.
-  ///
-  /// - Parameters:
-  ///   - pattern: The pattern to search for (as token IDs).
-  ///   - tokens: The original token array.
-  /// - Returns: Range of indices in the suffix array where pattern occurs.
-  func search(pattern: [Int], in tokens: [Int]) -> Range<Int>? {
-    guard !pattern.isEmpty, !array.isEmpty else { return nil }
-
-    // Find lower bound
-    var lo = 0
-    var hi = array.count
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if compare(suffix: array[mid], with: pattern, in: tokens) < 0 {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    let lower = lo
-
-    // Find upper bound
-    hi = array.count
-    while lo < hi {
-      let mid = lo + (hi - lo) / 2
-      if compare(suffix: array[mid], with: pattern, in: tokens) <= 0 {
-        lo = mid + 1
-      } else {
-        hi = mid
-      }
-    }
-    let upper = lo
-
-    return lower < upper ? lower..<upper : nil
-  }
-
-  /// Compare a suffix with a pattern.
-  /// Returns negative if suffix < pattern, 0 if prefix match, positive if suffix > pattern.
-  private func compare(suffix start: Int, with pattern: [Int], in tokens: [Int]) -> Int {
-    for i in 0..<pattern.count {
-      let pos = start + i
-      if pos >= tokens.count {
-        return -1  // Suffix is shorter, so it's "less than"
-      }
-      if tokens[pos] < pattern[i] {
-        return -1
-      }
-      if tokens[pos] > pattern[i] {
-        return 1
-      }
-    }
-    return 0  // Prefix match
-  }
-
-  /// Get all occurrences of a pattern.
-  func findOccurrences(of pattern: [Int], in tokens: [Int]) -> [Int] {
-    guard let range = search(pattern: pattern, in: tokens) else { return [] }
-    return (range.lowerBound..<range.upperBound).map { array[$0] }
   }
 }
