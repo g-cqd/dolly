@@ -127,10 +127,15 @@ content fingerprint, version-gated and fail-open (a corrupt or stale cache
 behaves as empty and is rewritten; entries for deleted files are pruned).
 
 ```sh
-dolly analyze Sources                       # cache at <user caches>/dolly/facts.json
+dolly analyze Sources                       # cache at <user caches>/dolly/<workspace>/facts.json
 dolly analyze --no-cache Sources            # disable for this run
-dolly analyze --cache-path .dolly-cache Sources
+dolly analyze --cache-path ~/Library/Caches/dolly/ci-facts.json Sources
 ```
+
+The default cache lives in the user caches directory, one file per
+repository. Keep an explicit `--cache-path` outside the analyzed repository
+too: a cache file inside it changes the working tree on every run, which
+`git status` and file watchers see.
 
 The cache stores extraction facts only — detection always re-runs, so
 findings can never go stale relative to engine or configuration changes.
