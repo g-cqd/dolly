@@ -68,7 +68,7 @@ public struct Analyzer: Sendable {
     var report = AnalysisReport()
     report.analyzedFileCount = files.count
 
-    let cache = cacheURL.map(FactsCache.load(url:))
+    let cache = cacheURL.map { FactsCache.load(url: $0, configuration: configuration) }
 
     let outcomes = await ParallelProcessor.map(
       files,
@@ -129,7 +129,7 @@ public struct Analyzer: Sendable {
     if !Task.isCancelled, let cacheURL, let cache,
       report.cacheMisses > 0 || Set(cache.entries.keys) != Set(freshCache.entries.keys)
     {
-      freshCache.persist(url: cacheURL)
+      freshCache.persist(url: cacheURL, configuration: configuration)
     }
 
     // Clone detection is whole-corpus by construction: a region is a clone
