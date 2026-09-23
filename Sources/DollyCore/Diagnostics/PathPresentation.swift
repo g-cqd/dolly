@@ -20,7 +20,9 @@ extension AnalysisReport {
   ///   root, so absolute paths produce findings that link nowhere.
   ///
   /// Paths outside `root` are left absolute rather than escaped into `../..`
-  /// chains, which no consumer resolves usefully.
+  /// chains, which no consumer resolves usefully. A degraded file's detail
+  /// quotes its path as free text, so the prefix is stripped there too — a
+  /// relative report must never mix both spellings.
   public func relativized(to root: String) -> AnalysisReport {
     let canonical = SourcePath.canonical(root)
     let prefix = canonical.hasSuffix("/") ? canonical : canonical + "/"
@@ -35,7 +37,7 @@ extension AnalysisReport {
       SuppressedFinding(finding: $0.finding.relativized(strip), reason: $0.reason)
     }
     copy.degradedFiles = degradedFiles.map {
-      DegradedFile(path: strip($0.path), detail: $0.detail)
+      DegradedFile(path: strip($0.path), detail: $0.detail.replacing(prefix, with: ""))
     }
     return copy
   }
