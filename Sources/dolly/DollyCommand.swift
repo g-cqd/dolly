@@ -81,9 +81,10 @@ struct Analyze: AsyncParsableCommand {
     name: .customLong("relative-to"),
     help: ArgumentHelp(
       "Report paths relative to this directory. Makes fingerprints (and so baselines) and SARIF "
-        + "uris independent of where the repository is checked out; GitHub code scanning also "
-        + "requires repo-relative uris to link findings. SARIF declares the directory as the "
-        + "uriBaseId SRCROOT. Use `--relative-to .` in CI."))
+        + "uris independent of where the repository is checked out, except the uris of paths "
+        + "that need percent-encoding, which stay absolute file:// URIs; GitHub code scanning "
+        + "also requires repo-relative uris to link findings. SARIF declares the directory as "
+        + "the uriBaseId SRCROOT. Use `--relative-to .` in CI."))
   var relativeTo: String?
 
   @Flag(name: .long, help: "Disable the facts cache for this run.")
