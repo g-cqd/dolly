@@ -122,9 +122,12 @@ and as SARIF `relatedLocations` / JSON `related`.
 
 ### Facts cache
 
-Warm runs skip parsing and extraction via a per-file facts cache keyed by
-content fingerprint, version-gated and fail-open (a corrupt or stale cache
-behaves as empty and is rewritten; entries for deleted files are pruned).
+Warm runs skip parsing and extraction via a per-file facts cache. Each entry
+uses a content fingerprint; the file also names the executable build and the
+complete configuration, including rules. A rebuild or configuration change
+starts cold even when the displayed version is unchanged. The loader checks
+that identity before decoding the payload. A corrupt or stale cache behaves
+as empty and is rewritten; entries for deleted files are pruned.
 
 ```sh
 dolly analyze Sources                       # cache at <user caches>/dolly/<workspace>/facts.json
@@ -137,8 +140,9 @@ repository. Keep an explicit `--cache-path` outside the analyzed repository
 too: a cache file inside it changes the working tree on every run, which
 `git status` and file watchers see.
 
-The cache stores extraction facts only — detection always re-runs, so
-findings can never go stale relative to engine or configuration changes.
+The cache stores extraction facts only. Detection runs on every invocation;
+the build and configuration identity keeps cached extraction facts tied to
+the run that produced them.
 
 ## Configuration
 
