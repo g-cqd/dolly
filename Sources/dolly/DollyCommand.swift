@@ -91,7 +91,7 @@ struct Analyze: AsyncParsableCommand {
 
   @Option(
     name: .long,
-    help: "Facts cache file (default: the user caches directory, dolly/facts.json).")
+    help: "Facts cache file (default: dolly/<workspace>/facts.json in the user caches directory).")
   var cachePath: String?
 
   @Flag(
