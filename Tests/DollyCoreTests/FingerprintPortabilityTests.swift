@@ -38,23 +38,30 @@ import Testing
     }
     """
 
-  private func makeCheckout(named name: String) throws -> [String] {
-    let root = URL(fileURLWithPath: NSTemporaryDirectory())
-      .appendingPathComponent("dolly-fp-\(name)-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  private func makeCheckout(named name: String) throws -> (
+    owner: TemporaryTestDirectory, files: [String]
+  ) {
+    let owner = try TemporaryTestDirectory(prefix: "dolly-fp-\(name)")
+    let root = owner.url
     // A `.git` entry is what marks the anchor; its contents are irrelevant.
     try Data().write(to: root.appendingPathComponent(".git"))
     let file = root.appendingPathComponent("Sample.swift")
     try Self.clonePair.write(to: file, atomically: true, encoding: .utf8)
-    return [file.path]
+    return (owner, [file.path])
   }
 
   @Test("The same code in two checkouts fingerprints identically")
   func portableAcrossCheckouts() async throws {
+    let firstCheckout = try makeCheckout(named: "here")
+    let secondCheckout = try makeCheckout(named: "there")
+    defer {
+      withExtendedLifetime(firstCheckout.owner) {}
+      withExtendedLifetime(secondCheckout.owner) {}
+    }
     let here = await Analyzer(configuration: Self.sensitive)
-      .analyze(files: try makeCheckout(named: "here"))
+      .analyze(files: firstCheckout.files)
     let there = await Analyzer(configuration: Self.sensitive)
-      .analyze(files: try makeCheckout(named: "there"))
+      .analyze(files: secondCheckout.files)
     #expect(!here.findings.isEmpty)
     #expect(here.findings.map(\.fingerprint) == there.findings.map(\.fingerprint))
     let firstHere = try #require(here.findings.first)
@@ -64,8 +71,10 @@ import Testing
 
   @Test("Fingerprints hash the repository-relative path")
   func anchoredToRepositoryRoot() async throws {
+    let checkout = try makeCheckout(named: "anchor")
+    defer { withExtendedLifetime(checkout.owner) {} }
     let report = await Analyzer(configuration: Self.sensitive)
-      .analyze(files: try makeCheckout(named: "anchor"))
+      .analyze(files: checkout.files)
     let finding = try #require(report.findings.first)
     #expect(finding.fingerprintPath == "Sample.swift")
   }
