@@ -8,8 +8,9 @@ acceptance, baselines for adoption on legacy code, and SARIF for code scanning.
 
 **Status: working detector.** The engine runs a zero-copy interned token
 pipeline: extraction interns every token into 16-byte records (normalization
-at intern time), the exact and near stages share one suffix-array (SA-IS +
-LCP) pass with declaration-boundary separators so same-file duplicates
+at intern time), the exact and near stages each run a suffix-array (SA-IS +
+LCP) pass over their own id lane — raw ids for exact, normalized ids for
+near — with declaration-boundary separators so same-file duplicates
 behave exactly like cross-file ones, and the structural stage uses
 SourcererCC-style prefix+position filtering (deterministic candidates —
 provably a superset of every pair above the similarity threshold) verified
@@ -161,7 +162,7 @@ dolly analyze --strict Sources        # exact + near + structural, fail on any f
 ```
 
 - **Fast enough to gate every push.** The default token pass (exact + near +
-  structural, one shared suffix-array build) runs in ~0.1 s on those 330 files
+  structural, one suffix-array build per id lane) runs in ~0.1 s on those 330 files
   (release) — sub-second, deterministic, no model, no network. This is the
   configuration to wire into CI.
 - **`exact` / `near` are the high-signal rules.** They fire on genuinely shared
