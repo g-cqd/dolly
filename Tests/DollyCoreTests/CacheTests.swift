@@ -161,6 +161,23 @@ import Testing
     #expect((await analyzer.analyze(files: files)).cacheHits == 2)
   }
 
+  /// load refuses a cache over its size cap, so persist must not write one:
+  /// past the cap, every run would write a file no run can read.
+  @Test("persist never writes a cache load would refuse")
+  func persistHoldsToTheLoadCap() async throws {
+    let (dir, cache, files) = try makeWorkspace()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    _ = await Analyzer(cacheURL: cache).analyze(files: files)
+    let snapshot = FactsCache.load(url: cache)
+    #expect(snapshot.entries.count == 2)
+
+    // A cap of one byte stands in for a corpus that outgrew the real one.
+    snapshot.persist(url: cache, cap: 1)
+    // Neither the oversized cache nor the one it would have replaced.
+    #expect(!FileManager.default.fileExists(atPath: cache.path))
+    #expect(FactsCache.load(url: cache).entries.isEmpty)
+  }
+
   @Test("Replacing an executable changes its cache identity")
   func executableIdentityChanges() throws {
     let dir = FileManager.default.temporaryDirectory

@@ -127,7 +127,8 @@ uses a content fingerprint; the file also names the executable build and the
 complete configuration, including rules. A rebuild or configuration change
 starts cold even when the displayed version is unchanged. The loader checks
 that identity before decoding the payload. A corrupt or stale cache behaves
-as empty and is rewritten; entries for deleted files are pruned.
+as empty and is rewritten; entries for deleted files are pruned. A cache
+larger than 256 MiB is neither read nor written.
 
 ```sh
 dolly analyze Sources                       # cache at <user caches>/dolly/<workspace>/facts.json
