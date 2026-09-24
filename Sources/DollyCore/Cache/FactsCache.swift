@@ -187,7 +187,8 @@ struct FactsCache: Sendable {
   // MARK: - Load / Persist
 
   /// Interned token payloads are an order of magnitude denser than config
-  /// JSON; the cap only guards against pathological files.
+  /// JSON; the cap only guards against pathological files. persist holds
+  /// to the same cap, so it never writes a file load refuses.
   static let maxCacheBytes = 256 * 1024 * 1024
 
   /// A plain-text line checked before JSON decoding. It includes the tool
@@ -221,8 +222,11 @@ struct FactsCache: Sendable {
 
   /// Best-effort persist: creates the directory, writes atomically, and
   /// swallows failures — a read-only cache location must never fail a run.
+  /// - Parameter cap: the largest file written; `maxCacheBytes`, the cap
+  ///   load reads under, except in tests.
   func persist(
-    url: URL, build: String? = BuildIdentity.current, configuration: Configuration = .default
+    url: URL, build: String? = BuildIdentity.current, configuration: Configuration = .default,
+    cap: Int = maxCacheBytes
   ) {
     guard let build, let header = Self.header(build: build, configuration: configuration) else {
       return
@@ -233,6 +237,14 @@ struct FactsCache: Sendable {
     guard let body = try? encoder.encode(payload) else { return }
     var data = Data((header + "\n").utf8)
     data.append(body)
+    // load refuses a file over the cap, so writing one only spends I/O on
+    // bytes no run will read — on every run, once the corpus outgrows the
+    // cap. The cache it would have replaced goes too: an over-cap file can
+    // never load, and an older one no longer describes this corpus.
+    guard data.count <= cap else {
+      try? FileManager.default.removeItem(at: url)
+      return
+    }
     try? FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),
       withIntermediateDirectories: true
