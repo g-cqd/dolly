@@ -1,3 +1,5 @@
+public import ProjectModel
+
 #if canImport(FoundationEssentials)
   import FoundationEssentials
 #else
@@ -40,6 +42,16 @@ public struct Configuration: Sendable, Codable, Equatable {
   public var exclude: [String]
   /// Optional duplication-engine tuning block.
   public var duplication: DuplicationSettings?
+  /// Regions (comma-separated: `preview,debug,test,mock,generated,script`,
+  /// or `all`) to treat as first-class code: a clone found only in preview
+  /// or generated code is reported like any other, tagged with its region;
+  /// one found only in test code stays at its rule's normal severity
+  /// instead of becoming a note. The same key, with the same values, in
+  /// deadwood, arcleak and dolly.
+  public var includeRegions: String?
+  /// Regions to keep out of scope even if `includeRegions` (or `all`)
+  /// names them; wins where the two disagree about the same region.
+  public var excludeRegions: String?
 
   /// Decodes a partial configuration.
   ///
@@ -55,19 +67,31 @@ public struct Configuration: Sendable, Codable, Equatable {
       try container.decodeIfPresent([String: RuleSettings].self, forKey: .rules) ?? [:]
     self.exclude = try container.decodeIfPresent([String].self, forKey: .exclude) ?? []
     self.duplication = try container.decodeIfPresent(DuplicationSettings.self, forKey: .duplication)
+    self.includeRegions = try container.decodeIfPresent(String.self, forKey: .includeRegions)
+    self.excludeRegions = try container.decodeIfPresent(String.self, forKey: .excludeRegions)
   }
 
   public init(
     rules: [String: RuleSettings] = [:],
     exclude: [String] = [],
-    duplication: DuplicationSettings? = nil
+    duplication: DuplicationSettings? = nil,
+    includeRegions: String? = nil,
+    excludeRegions: String? = nil
   ) {
     self.rules = rules
     self.exclude = exclude
     self.duplication = duplication
+    self.includeRegions = includeRegions
+    self.excludeRegions = excludeRegions
   }
 
   public static let `default` = Configuration()
+
+  /// The parsed region selection; throws on an unknown region name from
+  /// either key.
+  public func regionSelection() throws(UnknownRegionName) -> RegionSelection {
+    try RegionSelection(include: includeRegions, exclude: excludeRegions)
+  }
 
   public static func load(path: String) throws(DollyError) -> Configuration {
     let config = try BoundedFileReader.readJSON(Configuration.self, path: path)
@@ -83,6 +107,11 @@ public struct Configuration: Sendable, Codable, Equatable {
     {
       throw .configurationInvalid(
         path: path, detail: "duplication.minimumSimilarity must be in 0.0...1.0")
+    }
+    do {
+      _ = try config.regionSelection()
+    } catch {
+      throw .configurationInvalid(path: path, detail: error.description)
     }
     return config
   }

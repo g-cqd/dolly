@@ -1,5 +1,6 @@
 public import ArgumentParser
 import DollyCore
+import ProjectModel
 import SystemPackage
 
 #if canImport(FoundationEssentials)
@@ -123,8 +124,40 @@ struct Analyze: AsyncParsableCommand {
         + "clone families. Set 0 to disable the cap."))
   var semanticMaxGroup: Int = 25
 
+  @Option(
+    name: .long,
+    help: ArgumentHelp(
+      "Regions to treat as first-class code: preview,debug,test,mock,generated,script, or all.",
+      discussion:
+        "A clone group found only in preview or generated code is reported like any other, "
+        + "tagged \"region: <name>\" so it can be filtered back out — generated files otherwise "
+        + "never enter the corpus at all. One found only in test code keeps its rule's normal "
+        + "severity instead of becoming a note. debug, mock, and script name no region dolly "
+        + "weighs today, so including them has no effect. The same key, with the same values, "
+        + "in deadwood, arcleak and dolly."
+    )
+  )
+  var include: String?
+
+  @Option(
+    name: .long,
+    help: "Regions to keep out of scope even if --include (or \"all\") names them."
+  )
+  var exclude: String?
+
   func run() async throws {
-    let configuration = try loadConfiguration()
+    var configuration = try loadConfiguration()
+    if let include {
+      configuration.includeRegions = include
+    }
+    if let exclude {
+      configuration.excludeRegions = exclude
+    }
+    do {
+      _ = try configuration.regionSelection()
+    } catch {
+      throw ValidationError(error.description)
+    }
     let reportScope = try resolveReportScope()
     let files = try discoverSwiftFiles(configuration: configuration)
     guard !files.isEmpty else { throw ValidationError(DollyError.noInputs.description) }
