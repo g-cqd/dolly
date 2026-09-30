@@ -30,6 +30,12 @@ let package = Package(
     // ~50 MiB of ICU on Linux; the C `fputs` route needs three separate unsafe
     // markers. One small, dependency-free Apple package is the better trade.
     .package(url: "https://github.com/apple/swift-system.git", from: "1.7.1"),
+    // The project model the analyzers share: previews, test code, generated
+    // files. Pinned by revision, as the other analyzers pin it.
+    .package(
+      url: "https://github.com/g-cqd/analyzerkit.git",
+      revision: "47c6a9585fecd44fd70eb84530996fb1473d2868"
+    ),
   ],
   targets: [
     .target(
@@ -37,6 +43,7 @@ let package = Package(
       dependencies: [
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftParser", package: "swift-syntax"),
+        .product(name: "ProjectModel", package: "analyzerkit"),
       ],
       swiftSettings: strictSwiftSettings
     ),
