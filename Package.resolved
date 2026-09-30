@@ -1,12 +1,12 @@
 {
-  "originHash" : "d151393d950de367379f3e987f4475e8bb164c2464ffff8a16e1fde3dfff5c57",
+  "originHash" : "78f776bf1885eb277cffa299abc2e63adcf163616c20e79de722f9bacc4e5367",
   "pins" : [
     {
       "identity" : "analyzerkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "47c6a9585fecd44fd70eb84530996fb1473d2868"
+        "revision" : "b0153775221c15f865eaf71d55d7f5df7b51df6c"
       }
     },
     {

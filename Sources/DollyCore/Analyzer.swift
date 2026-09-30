@@ -1,3 +1,4 @@
+import ProjectModel
 import SwiftParser
 import SwiftSyntax
 
@@ -98,7 +99,8 @@ public struct Analyzer: Sendable {
         let tokens = entry.fileTokens(path: path, source: source)
       {
         let prepared = PreparedFile(
-          tokens: tokens, table: SuppressionTable(directives: entry.directives), context: entry.context)
+          tokens: tokens, table: SuppressionTable(directives: entry.directives),
+          context: entry.context)
         return .prepared(prepared, entry: entry, cached: true)
       }
       let (tokens, directives, context) = Self.extractFacts(source: source, path: path)
@@ -193,7 +195,8 @@ public struct Analyzer: Sendable {
   /// `runEngine` merges the tables corpus-side.
   private static func prepare(source: String, path: String) -> PreparedFile {
     let (tokens, directives, context) = extractFacts(source: source, path: path)
-    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives), context: context)
+    return PreparedFile(
+      tokens: tokens, table: SuppressionTable(directives: directives), context: context)
   }
 
   /// The uncached extraction path: parse, scan directives, intern tokens.
@@ -207,12 +210,25 @@ public struct Analyzer: Sendable {
     return (tokens, directives, FileContext(path: path, tree: tree, converter: converter))
   }
 
+  /// The parsed `--include`/`--exclude` selection; `Configuration.load`
+  /// already validated it, so this can only fail for a `Configuration`
+  /// built by hand with a bogus region name, and it fails open rather than
+  /// making a rejected name analyze nothing.
+  private var regionSelection: RegionSelection {
+    (try? configuration.regionSelection()) ?? .none
+  }
+
   /// Run the duplication engine across the corpus and partition results
   /// into findings and suppressed findings.
-  private func runEngine(over allPrepared: [PreparedFile], into report: inout AnalysisReport) async {
+  private func runEngine(over allPrepared: [PreparedFile], into report: inout AnalysisReport) async
+  {
     // Nobody edits a generated file, and generators repeat themselves by
-    // design: generated files are left out of the corpus.
-    let prepared = allPrepared.filter { !$0.context.isGenerated }
+    // design: generated files are left out of the corpus — unless
+    // `--include generated` asks for them checked like any other.
+    let regionSelection = self.regionSelection
+    let prepared =
+      regionSelection.isIncluded(.generated)
+      ? allPrepared : allPrepared.filter { !$0.context.isGenerated }
     let generatedCount = allPrepared.count - prepared.count
     var previewGroupCount = 0
     defer {
@@ -252,13 +268,17 @@ public struct Analyzer: Sendable {
     }
 
     let contexts = prepared.keyed(by: \.tokens.file).mapValues(\.context)
-    let weighted = ProjectWeighting.withoutPreviews(groups, contexts: contexts)
+    let weighted = ProjectWeighting.withoutPreviews(
+      groups, contexts: contexts, regionSelection: regionSelection)
     groups = weighted.groups
     previewGroupCount = weighted.droppedGroupCount
 
     let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
-    let findings = CloneReporting.findings(from: groups, configuration: configuration)
-      .map { ProjectWeighting.weighted($0, contexts: contexts) }
+    let findings = CloneReporting.findings(
+      from: groups, configuration: configuration, contexts: contexts,
+      regionSelection: regionSelection
+    )
+    .map { ProjectWeighting.weighted($0, contexts: contexts, regionSelection: regionSelection) }
     for finding in findings {
       // A finding is suppressed when the anchor file's directives
       // cover the anchor line.
