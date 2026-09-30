@@ -98,13 +98,14 @@ public struct Analyzer: Sendable {
         let tokens = entry.fileTokens(path: path, source: source)
       {
         let prepared = PreparedFile(
-          tokens: tokens, table: SuppressionTable(directives: entry.directives))
+          tokens: tokens, table: SuppressionTable(directives: entry.directives), context: entry.context)
         return .prepared(prepared, entry: entry, cached: true)
       }
-      let (tokens, directives) = Self.extractFacts(source: source, path: path)
-      let prepared = PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
+      let (tokens, directives, context) = Self.extractFacts(source: source, path: path)
+      let prepared = PreparedFile(
+        tokens: tokens, table: SuppressionTable(directives: directives), context: context)
       let entry = FactsCache.Entry(
-        fingerprint: fingerprint, tokens: tokens, directives: directives)
+        fingerprint: fingerprint, tokens: tokens, directives: directives, context: context)
       return .prepared(prepared, entry: entry, cached: false)
     }
 
@@ -179,6 +180,7 @@ public struct Analyzer: Sendable {
   private struct PreparedFile: Sendable {
     let tokens: FileTokens
     let table: SuppressionTable
+    let context: FileContext
   }
 
   private enum FileOutcome: Sendable {
@@ -190,24 +192,33 @@ public struct Analyzer: Sendable {
   /// Interning stays per-file here so preparation remains parallel-safe;
   /// `runEngine` merges the tables corpus-side.
   private static func prepare(source: String, path: String) -> PreparedFile {
-    let (tokens, directives) = extractFacts(source: source, path: path)
-    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives))
+    let (tokens, directives, context) = extractFacts(source: source, path: path)
+    return PreparedFile(tokens: tokens, table: SuppressionTable(directives: directives), context: context)
   }
 
   /// The uncached extraction path: parse, scan directives, intern tokens.
   private static func extractFacts(
     source: String, path: String
-  ) -> (FileTokens, [SuppressionDirective]) {
+  ) -> (FileTokens, [SuppressionDirective], FileContext) {
     let tree = Parser.parse(source: source)
     let converter = SourceLocationConverter(fileName: path, tree: tree)
     let directives = DirectiveScanner.scan(tree: tree, converter: converter)
     let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
-    return (tokens, directives)
+    return (tokens, directives, FileContext(path: path, tree: tree, converter: converter))
   }
 
   /// Run the duplication engine across the corpus and partition results
   /// into findings and suppressed findings.
-  private func runEngine(over prepared: [PreparedFile], into report: inout AnalysisReport) async {
+  private func runEngine(over allPrepared: [PreparedFile], into report: inout AnalysisReport) async {
+    // Nobody edits a generated file, and generators repeat themselves by
+    // design: generated files are left out of the corpus.
+    let prepared = allPrepared.filter { !$0.context.isGenerated }
+    let generatedCount = allPrepared.count - prepared.count
+    var previewGroupCount = 0
+    defer {
+      report.contextNote = ProjectWeighting.note(
+        generatedFileCount: generatedCount, previewGroupCount: previewGroupCount)
+    }
     guard !prepared.isEmpty else { return }
     // The token/suffix-array engine handles exact/near/structural; the
     // semantic (Type-4) type is produced only by the opt-in embedding pass,
@@ -240,8 +251,15 @@ public struct Analyzer: Sendable {
         contentsOf: await runSemanticPass(over: prepared, options: semantic, into: &report))
     }
 
+    let contexts = prepared.keyed(by: \.tokens.file).mapValues(\.context)
+    let weighted = ProjectWeighting.withoutPreviews(groups, contexts: contexts)
+    groups = weighted.groups
+    previewGroupCount = weighted.droppedGroupCount
+
     let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
-    for finding in CloneReporting.findings(from: groups, configuration: configuration) {
+    let findings = CloneReporting.findings(from: groups, configuration: configuration)
+      .map { ProjectWeighting.weighted($0, contexts: contexts) }
+    for finding in findings {
       // A finding is suppressed when the anchor file's directives
       // cover the anchor line.
       if let reason = tables[finding.path]?.suppression(for: finding.rule, line: finding.line) {
