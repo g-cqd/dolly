@@ -5,6 +5,8 @@
 //  group, anchored at the group's first member in deterministic order, with
 //  every other member listed in the note.
 
+import ProjectModel
+
 enum CloneReporting {
   /// Precedence order between clone types: an exact clone is also a near
   /// clone, and both trip the structural detector; a semantic (Type-4)
@@ -39,7 +41,15 @@ enum CloneReporting {
 
   /// Convert clone groups into findings: precedence-filter, then emit one
   /// finding per surviving group.
-  static func findings(from groups: [CloneGroup], configuration: Configuration) -> [Finding] {
+  /// - Parameters:
+  ///   - contexts: File project context, keyed by path; used only to tag a
+  ///     finding that exists solely because `--include` widened generated
+  ///     or preview code into the corpus.
+  ///   - regionSelection: The parsed `--include`/`--exclude` selection.
+  static func findings(
+    from groups: [CloneGroup], configuration: Configuration,
+    contexts: [String: FileContext] = [:], regionSelection: RegionSelection = .none
+  ) -> [Finding] {
     filterByPrecedence(normalize(groups)).map { group in
       let members = group.clones
       let anchor = members[0]
@@ -56,6 +66,9 @@ enum CloneReporting {
         group.type == .semantic
         ? "\(members.count) semantically similar regions (idiom-level, cosine \(similarity))"
         : "\(members.count) duplicated regions of ~\(tokens) tokens (similarity \(similarity))"
+      let region = taggedRegion(of: members, contexts: contexts, regionSelection: regionSelection)
+      let note =
+        region.isEmpty ? "duplicates: \(others)" : "duplicates: \(others); region: \(region.names)"
       return Finding(
         rule: rule,
         severity: configuration.severity(for: rule),
@@ -63,12 +76,35 @@ enum CloneReporting {
         line: anchor.startLine,
         column: anchor.startColumn,
         message: message,
-        note: "duplicates: \(others)",
+        note: note,
         related: members.dropFirst().map {
           RelatedLocation(path: $0.file, line: $0.startLine, column: $0.startColumn)
         }
       )
     }
+  }
+
+  /// The `--include`d region(s), of generated or preview, that this group
+  /// has at least one member in — the reason it exists as a finding at all
+  /// (a group entirely outside an included region needs no tag: nothing
+  /// about it depends on `--include`).
+  private static func taggedRegion(
+    of members: [Clone], contexts: [String: FileContext], regionSelection: RegionSelection
+  ) -> CodeRegion {
+    var region: CodeRegion = []
+    if regionSelection.isIncluded(.generated),
+      members.contains(where: { contexts[$0.file]?.isGenerated == true })
+    {
+      region.insert(.generated)
+    }
+    if regionSelection.isIncluded(.preview),
+      members.contains(where: {
+        contexts[$0.file]?.isPreview(start: $0.startLine, end: $0.endLine) == true
+      })
+    {
+      region.insert(.preview)
+    }
+    return region
   }
 
   /// Two-decimal similarity, locale-free (`String(format:)` is variadic
