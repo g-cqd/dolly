@@ -45,9 +45,15 @@ struct FactsCache: Sendable {
     let hasSourceLocationDirective: Bool
     /// Suppression directives scanned from the parse tree.
     let directives: [SuppressionDirective]
+    /// The file's project context (generated, test, previews).
+    let context: FileContext
 
-    init(fingerprint: String, tokens: FileTokens, directives: [SuppressionDirective]) {
+    init(
+      fingerprint: String, tokens: FileTokens, directives: [SuppressionDirective],
+      context: FileContext
+    ) {
       self.fingerprint = fingerprint
+      self.context = context
       var bytes = [UInt8]()
       bytes.reserveCapacity(tokens.records.count * 16)
       for record in tokens.records {
