@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "a849bb985138ecea0a8d3c8aa8e15499625585d9"
+      revision: "52b58c1558a472b510ee2b7b805c88166cbe7d3a"
     ),
   ],
   targets: [
