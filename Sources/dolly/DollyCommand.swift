@@ -44,7 +44,7 @@ struct Analyze: AsyncParsableCommand {
   @Option(name: .long, help: "Output format: xcode, json, or sarif.")
   var format: OutputFormat = .xcode
 
-  @Flag(name: .long, help: "Exit 1 on any finding, not just errors.")
+  @Flag(name: .long, help: "Exit 1 on any warning or error finding; notes never fail a run.")
   var strict = false
 
   @Option(name: .long, help: "Configuration file (default: ./.dolly.json when present).")
@@ -193,6 +193,9 @@ struct Analyze: AsyncParsableCommand {
     if let note = report.semanticNote {
       writeStandardError(ToolInfo.name + ": " + note + "\n")
     }
+    if let note = report.contextNote {
+      writeStandardError(ToolInfo.name + ": " + note + "\n")
+    }
 
     if let writeBaseline {
       // Guarded in validate(): a baseline is whole-corpus debt by definition,
@@ -223,7 +226,9 @@ struct Analyze: AsyncParsableCommand {
     }
     writeStandardError(summary + "\n")
 
-    let failed = strict ? !report.findings.isEmpty : report.maxSeverity == .error
+    // Notes inform; they never fail a run, not even a strict one.
+    let failed =
+      strict ? report.findings.contains { $0.severity > .note } : report.maxSeverity == .error
     if failed {
       throw ExitCode(1)
     }
