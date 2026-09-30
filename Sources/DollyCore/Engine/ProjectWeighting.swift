@@ -7,15 +7,27 @@
 //  group found only in test code becomes a note. A group spanning
 //  production and tests keeps its severity: tests re-implementing
 //  production logic is worth knowing.
+//
+//  `--include preview`/`--include test` asks for exactly what this weighs
+//  down: a clone in one of those regions checked like any other, not
+//  dropped or downgraded. `--include generated` is answered in the
+//  Analyzer, which is where generated files leave the corpus in the first
+//  place.
+
+import ProjectModel
 
 enum ProjectWeighting {
   /// The groups without their members that lie in previews; a group left
-  /// with fewer than two members is dropped and counted.
+  /// with fewer than two members is dropped and counted. `--include
+  /// preview` keeps every member instead — the whole point is to stop
+  /// treating previews specially.
   /// - Complexity: O(m · p) for m members and p preview spans per file.
   static func withoutPreviews(
     _ groups: [CloneGroup],
-    contexts: [String: FileContext]
+    contexts: [String: FileContext],
+    regionSelection: RegionSelection = .none
   ) -> (groups: [CloneGroup], droppedGroupCount: Int) {
+    guard !regionSelection.isIncluded(.preview) else { return (groups, 0) }
     var kept: [CloneGroup] = []
     var dropped = 0
     for group in groups {
@@ -29,14 +41,19 @@ enum ProjectWeighting {
       } else {
         kept.append(
           CloneGroup(
-            type: group.type, clones: clones, similarity: group.similarity, fingerprint: group.fingerprint))
+            type: group.type, clones: clones, similarity: group.similarity,
+            fingerprint: group.fingerprint))
       }
     }
     return (kept, dropped)
   }
 
-  /// The finding as a note when every region it names is test code.
-  static func weighted(_ finding: Finding, contexts: [String: FileContext]) -> Finding {
+  /// The finding as a note when every region it names is test code —
+  /// unless `--include test` asks for it checked like any other.
+  static func weighted(
+    _ finding: Finding, contexts: [String: FileContext], regionSelection: RegionSelection = .none
+  ) -> Finding {
+    guard !regionSelection.isIncluded(.test) else { return finding }
     let paths = [finding.path] + finding.related.map(\.path)
     guard paths.allSatisfy({ contexts[$0]?.isTestCode == true }) else { return finding }
     return Finding(
