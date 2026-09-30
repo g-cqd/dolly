@@ -42,7 +42,7 @@ characterization test.
 ```sh
 dolly analyze Sources            # xcode-format diagnostics, exit 1 on errors
 dolly analyze --format sarif .   # SARIF 2.1.0 (also: --format json)
-dolly analyze --strict Sources   # exit 1 on any finding
+dolly analyze --strict Sources   # exit 1 on any warning or error; notes never fail
 dolly analyze --semantic Sources # + Type-4 (idiom-level) clones, macOS-only
 dolly rules                      # list rules; `rules <id>` explains one
 ```
@@ -187,9 +187,26 @@ dolly analyze --strict Sources        # exact + near + structural, fail on any f
   than exact/near; keep it on, tune `minimumSimilarity` up if a codebase is
   boilerplate-heavy.
 - **Least useful when** a codebase legitimately contains many small, near-
-  identical value types or generated files — exclude generated code with
-  `exclude` and accept intentional parallel backends rather than lowering the
-  token floor (a low `minimumTokens` turns ordinary boilerplate into noise).
+  identical value types — accept intentional parallel backends rather than
+  lowering the token floor (a low `minimumTokens` turns ordinary boilerplate
+  into noise).
+
+### Where duplication lives
+
+dolly weighs a clone by where it lives, with analyzerkit's project model:
+
+- **Generated files** (a header naming a generator, a `Generated` directory,
+  `*.generated.swift`) are left out of the corpus: generators repeat
+  themselves by design and nobody edits their output.
+- **Previews** (`#Preview` bodies, `PreviewProvider` types) repeat a view with
+  small variations and never ship: a copy lying mostly in a preview is
+  dropped, and a group left with one copy with it.
+- **Test code** (a file importing XCTest or Testing, or a test path) is often
+  deliberately repetitive, each test readable on its own: a group found only
+  in test code is a note. A group spanning production and tests keeps its
+  severity: tests re-implementing production logic are worth knowing about.
+
+A line on stderr (`contextNote` in JSON) says what was left out.
 
 ### `--semantic` (Type-4) — targeted, not CI
 
@@ -343,16 +360,16 @@ reporting nothing.
 
 | Code | Meaning |
 |---|---|
-| `0` | the gate passed: no error-severity finding, so warnings alone pass; with `--strict`, no finding at all. Also after `--write-baseline` |
-| `1` | the gate failed on findings: an error-severity finding, or with `--strict` any finding — and nothing else |
+| `0` | the gate passed: no error-severity finding, so warnings and notes alone pass; with `--strict`, no warning or error. Also after `--write-baseline` |
+| `1` | the gate failed on findings: an error-severity finding, or with `--strict` any warning or error — and nothing else |
 | `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
 | `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
 | `78` | invalid configuration, or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
-not fire on a typo in the config file. Every rule defaults to warning, so
-findings are always reported, but only an `error` severity or `--strict`
-makes them fail the gate. A cancelled run reports **no** findings
+not fire on a typo in the config file. Every rule defaults to warning (test-
+only groups are notes), so findings are always reported, but only an `error`
+severity or `--strict` makes them fail the gate, and a note never does. A cancelled run reports **no** findings
 and exits `70` rather than looking clean: a whole-program analysis over a
 partial corpus does not report less, it reports wrongly.
 
