@@ -29,6 +29,9 @@ public struct AnalysisReport: Sendable, Codable {
   /// provider wasn't available (macOS-only capability). Optional, so default
   /// runs omit it from JSON entirely.
   public var semanticNote: String?
+  /// What the project model left out: generated files, clone groups found
+  /// only in previews. Nil when nothing was, so default runs omit it.
+  public var contextNote: String?
 
   public init(
     findings: [Finding] = [],
