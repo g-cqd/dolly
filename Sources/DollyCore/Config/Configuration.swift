@@ -11,6 +11,7 @@ public import ProjectModel
 /// Malformed configuration is a hard, typed failure — the analyzer fails
 /// closed rather than running with rules silently dropped.
 public struct Configuration: Sendable, Codable, Equatable {
+  // @dl:accept -- RuleSettings and DuplicationSettings are separate Codable blocks that happen to share the memberwise shape
   public struct RuleSettings: Sendable, Codable, Equatable {
     public var enabled: Bool?
     public var severity: Severity?
