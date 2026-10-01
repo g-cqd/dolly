@@ -65,7 +65,8 @@ import Testing
   @Test func `a group spanning production and tests keeps its severity`() async throws {
     let report = try await analyze([
       "Sources/Report.swift": Self.body(named: "buildReport"),
-      "Tests/SampleTests/ReportTests.swift": "import Testing\n" + Self.body(named: "expectedReport"),
+      "Tests/SampleTests/ReportTests.swift": "import Testing\n"
+        + Self.body(named: "expectedReport"),
     ])
 
     #expect(!report.findings.isEmpty)
