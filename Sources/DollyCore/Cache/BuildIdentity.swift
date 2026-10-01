@@ -15,9 +15,9 @@ enum BuildIdentity {
     guard let path else { return nil }
     let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     guard let attributes = try? FileManager.default.attributesOfItem(atPath: resolved),
-      let device = number(attributes[.systemNumber]),
-      let inode = number(attributes[.systemFileNumber]),
-      let size = number(attributes[.size]),
+      let device = FileAttributeNumber.read(attributes[.systemNumber]),
+      let inode = FileAttributeNumber.read(attributes[.systemFileNumber]),
+      let size = FileAttributeNumber.read(attributes[.size]),
       let modified = attributes[.modificationDate] as? Date
     else { return nil }
 
@@ -31,17 +31,6 @@ enum BuildIdentity {
       hash &*= 0x0000_0100_0000_01b3
     }
     return String(hash, radix: 16)
-  }
-
-  /// Foundation boxes file attributes as `NSNumber` on Darwin, and as `UInt` or
-  /// `UInt64` in FoundationEssentials, which has no `NSNumber` on Linux.
-  private static func number(_ value: Any?) -> UInt64? {
-    switch value {
-    case let number as UInt64: number
-    case let number as UInt: UInt64(number)
-    case let number as Int: UInt64(exactly: number)
-    default: nil
-    }
   }
 
   private static var executablePath: String? {
