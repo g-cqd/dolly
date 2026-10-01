@@ -99,23 +99,12 @@ public enum SourceDiscovery {
     case path(String)
 
     init(attributes: [FileAttributeKey: Any], resolvedPath: String) {
-      if let device = Self.number(attributes[.systemNumber]),
-        let inode = Self.number(attributes[.systemFileNumber])
+      if let device = FileAttributeNumber.read(attributes[.systemNumber]),
+        let inode = FileAttributeNumber.read(attributes[.systemFileNumber])
       {
         self = .node(device: device, inode: inode)
       } else {
         self = .path(resolvedPath)
-      }
-    }
-
-    /// Foundation boxes these attributes as `NSNumber` on Darwin, and as
-    /// `UInt` or `UInt64` in FoundationEssentials.
-    private static func number(_ value: Any?) -> UInt64? {
-      switch value {
-      case let number as UInt64: number
-      case let number as UInt: UInt64(number)
-      case let number as Int: UInt64(exactly: number)
-      default: nil
       }
     }
   }
