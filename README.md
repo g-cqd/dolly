@@ -51,6 +51,105 @@ Clone-group findings anchor at the first member and carry every other
 member both in the note text and as structured locations (SARIF
 `relatedLocations`, JSON `related`).
 
+## CLI and JSON contract (1.x)
+
+Within 1.x, these do not change incompatibly: the `analyze` command and the
+flags below, the exit codes, the JSON field names, and the fingerprint.
+
+### Stable surface
+
+| Flag | Meaning |
+|------|---------|
+| `analyze <paths…>` | files or directories to analyze (default `.`) |
+| `--format` | `xcode` (default), `json` or `sarif` |
+| `--only <file>` | report only findings touching this file; repeatable |
+| `--only-from <file>` | the same, one path per line; `-` reads stdin |
+| `--relative-to <dir>` | print paths relative to `<dir>`; see [Baselines and fingerprints](#baselines-and-fingerprints) |
+| `--baseline <file>` | filter out findings the baseline records |
+| `--write-baseline <file>` | write the current findings as a baseline, then exit 0 |
+| `--config <file>` | configuration file (default `./.dolly.json`) |
+| `--cache-path <file>`, `--no-cache` | facts cache file; or disable the cache |
+| `--strict` | fail on any warning or error; notes never fail |
+| `--include`, `--exclude` | region filters: `preview`, `debug`, `test`, `mock`, `generated`, `script`, `all` |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | the gate passed; see [Exit codes](#exit-codes) |
+| `1` | the gate failed on findings, and nothing else |
+| `64` | usage error, including `--write-baseline` with a scope |
+| `70` | nothing analyzed (stdout names the skipped files), or cancelled (stdout empty) |
+| `78` | invalid configuration, or a missing or malformed baseline |
+
+### `--only` scope
+
+The whole corpus is analyzed; only the report is scoped. A finding is kept
+when any of its locations (anchor or `related`) is in scope, and it is reported
+at its first in-scope location. The rest go to `outOfScope` in JSON and to the
+summary count. Scope entries are canonicalized like finding paths, so
+`--relative-to` does not change which findings are in scope. An empty scope
+reports nothing and exits 0. See [Scope-file hygiene](#scope-file-hygiene).
+
+A clone group in scope only through a non-anchor member is reported at that
+member, with the original anchor first in `related`. Its `fingerprint` and
+`fingerprintAnchor` stay those of the original anchor, so baselines keep matching.
+
+### JSON report
+
+`--format json` prints one object. Optional keys are omitted when unset.
+
+| Top-level field | Meaning |
+|-----------------|---------|
+| `schemaVersion` | `1`, shared by arcleak, dolly and deadwood |
+| `findings`, `outOfScope` | findings to act on; findings outside `--only` |
+| `suppressed` | findings silenced by a directive, each `{finding, reason}` |
+| `degradedFiles` | files skipped or read with errors, each `{path, detail}` |
+| `analyzedFileCount`, `cacheHits`, `cacheMisses` | counts for the run |
+| `wasCancelled` | always `false` in printed output (a cancelled run prints nothing) |
+| `semanticNote`, `contextNote` | optional notes, present when there is something to say |
+
+| Finding field | Meaning |
+|---------------|---------|
+| `rule` | `exact-clone`, `near-clone`, `structural-clone` or `semantic-clone` |
+| `severity` | `note`, `warning` or `error` |
+| `path`, `line`, `column` | the anchor; `line` is 1-based, `column` counts UTF-8 bytes |
+| `message`, `note` | one-line description; `note` is optional (clone groups list `duplicates: …`) |
+| `related` | optional `[{path, line, column}]`, the other members; omitted when empty |
+| `fingerprint` | stable identity hash; baselines match on it |
+| `fingerprintAnchor` | optional `{path, line, column}`: the original anchor of a finding moved by `--only` |
+
+`fingerprintPath` is never emitted, although the decoder reads it.
+
+`schemaVersion` changes only on a breaking change: a field removed, renamed,
+retyped or made required; a meaning changed; or a closed value set (rule ids,
+severities) changed. Consumers ignore unknown fields and reject a higher version.
+
+### Facts cache
+
+The default is `~/Library/Caches/dolly/<workspace>/facts.json` on macOS, where
+`<workspace>` hashes the repository root found from the working directory (the
+working directory itself, outside a repository). Writes are atomic and each
+entry is checked against its file's content, so concurrent runs never read torn
+or wrong facts; at worst one run's update is lost. Each run rewrites the file
+with its own files, so parallel CI jobs on one machine should each pass their
+own `--cache-path`, which avoids lost updates and evictions. See
+[Facts cache](#facts-cache).
+
+### Baselines and fingerprints
+
+- `fingerprint` hashes rule, path, line, column and message. The path is
+  repository-relative by default, so a committed baseline matches on any machine
+  ([details](#fingerprints-are-portable-by-default)).
+- `--relative-to <dir>` makes the hashed path relative to `<dir>` too. Baselines
+  match only between runs with the same `--relative-to`, or both without it. At
+  the repository root it hashes the same paths as none.
+- Line and column are hashed, so an edit above a baselined finding re-surfaces
+  it. Regenerate baselines after large refactors.
+- New findings only: `dolly analyze . --write-baseline base.json` on the base
+  branch, then `dolly analyze . --baseline base.json --only-from changed.txt`
+  on the pull request.
+
 ## Semantic clones (opt-in, macOS-only)
 
 The default engine is token-based, so it cannot see Type-4 clones — two
@@ -363,7 +462,7 @@ reporting nothing.
 | `0` | the gate passed: no error-severity finding, so warnings and notes alone pass; with `--strict`, no warning or error. Also after `--write-baseline` |
 | `1` | the gate failed on findings: an error-severity finding, or with `--strict` any warning or error — and nothing else |
 | `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
-| `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run failed or was cancelled, and stdout is empty |
+| `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run was cancelled, and stdout is empty |
 | `78` | invalid configuration, or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
