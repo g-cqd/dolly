@@ -193,7 +193,7 @@ jobs:
             exit 1
           fi
           # Verify the downloaded per-platform archives before anything is unpacked.
-          for s in dolly-*.tar.gz.sha256; do sha256sum -c "$s"; done
+          for a in dolly-*.tar.gz; do sha256sum -c "$a.sha256"; done
           for archive in dolly-*-macos-arm64.tar.gz dolly-*-linux-x86_64.tar.gz; do
             name="${archive%.tar.gz}"
             case "$name" in
