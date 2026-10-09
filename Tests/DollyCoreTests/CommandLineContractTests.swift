@@ -183,6 +183,40 @@ import Testing
       #expect(!result.message.text.contains(root.path), "\(result.message.text)")
     }
   }
+
+  // MARK: - Report scope
+
+  @Test("A scope spelled through a symlinked prefix matches its file without warning")
+  func scopeSpelledThroughSymlinkDoesNotWarn() throws {
+    let root = try Workspace.make(["A.swift": "let value = 1\n"])
+    defer { try? FileManager.default.removeItem(at: root) }
+    // On macOS /var links to /private/var, and the working directory is
+    // reported as /private/var. The analyzed path carries that spelling, which
+    // canonicalization strips, so the raw corpus and the canonical scope only
+    // agree if the corpus is canonicalized too.
+    #if os(macOS)
+      let analyzed = "/private" + root.path
+    #else
+      let analyzed = root.path
+    #endif
+    let run = try BuiltTool.run(["analyze", analyzed, "--no-cache", "--only", "A.swift"], in: root)
+
+    let errors = String(decoding: run.standardError, as: UTF8.self)
+    #expect(run.status == 0)
+    #expect(!errors.contains("matches no analyzed file"))
+  }
+
+  @Test("A scope that names no analyzed file still warns")
+  func scopeNamingNoAnalyzedFileWarns() throws {
+    let root = try Workspace.make(["A.swift": "let value = 1\n"])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let run = try BuiltTool.run(
+      ["analyze", root.path, "--no-cache", "--only", "Missing.swift"], in: root)
+
+    let errors = String(decoding: run.standardError, as: UTF8.self)
+    #expect(run.status == 0)
+    #expect(errors.contains("matches no analyzed file"))
+  }
 }
 
 // MARK: - Harness
@@ -207,6 +241,7 @@ enum BuiltTool {
   struct Run {
     let status: Int32
     let standardOutput: Data
+    let standardError: Data
   }
 
   /// The SARIF log `dolly analyze` prints for `analyzed`, relativized to `base`
@@ -228,9 +263,9 @@ enum BuiltTool {
     return try run(arguments, in: directory)
   }
 
-  /// The executable's exit status and standard output. Output goes to a file
-  /// rather than a pipe, so a large report cannot fill a pipe buffer and stall
-  /// the child while the test waits for it to exit.
+  /// The executable's exit status, standard output, and standard error. Output
+  /// goes to files rather than pipes, so a large report cannot fill a pipe
+  /// buffer and stall the child while the test waits for it to exit.
   static func run(_ arguments: [String], in directory: URL) throws -> Run {
     let executable = try #require(
       executable,
@@ -240,19 +275,26 @@ enum BuiltTool {
     try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: scratch) }
     let outputURL = scratch.appending(path: "stdout")
+    let errorURL = scratch.appending(path: "stderr")
     try Data().write(to: outputURL)
+    try Data().write(to: errorURL)
     let output = try FileHandle(forWritingTo: outputURL)
+    let errors = try FileHandle(forWritingTo: errorURL)
 
     let process = Process()
     process.executableURL = executable
     process.arguments = arguments
     process.currentDirectoryURL = directory
     process.standardOutput = output
-    process.standardError = FileHandle.nullDevice
+    process.standardError = errors
     try process.run()
     process.waitUntilExit()
     try output.close()
-    return Run(status: process.terminationStatus, standardOutput: try Data(contentsOf: outputURL))
+    try errors.close()
+    return Run(
+      status: process.terminationStatus,
+      standardOutput: try Data(contentsOf: outputURL),
+      standardError: try Data(contentsOf: errorURL))
   }
 }
 
