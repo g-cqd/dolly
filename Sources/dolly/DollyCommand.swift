@@ -63,7 +63,8 @@ struct Analyze: AsyncParsableCommand {
       "Report only findings touching this file; repeatable. The whole corpus is still analyzed "
         + "— duplication is a corpus property, so narrowing the input would fabricate and lose "
         + "clones alike. A clone group qualifies when any of its members is listed, not just the "
-        + "one it happens to be anchored at."))
+        + "one it happens to be anchored at. A clone group in scope only through another member "
+        + "is reported at its first in-scope member."))
   var only: [String] = []
 
   // ArgumentParser option declarations are a fixed shape (@Option, name:,

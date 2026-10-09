@@ -47,14 +47,20 @@ dolly analyze --semantic Sources # + Type-4 (idiom-level) clones, macOS-only
 dolly rules                      # list rules; `rules <id>` explains one
 ```
 
-Clone-group findings anchor at the first member and carry every other
+Clone-group findings anchor at the first member (or, with `--only`, at the first member inside the scope) and carry every other
 member both in the note text and as structured locations (SARIF
 `relatedLocations`, JSON `related`).
 
 ## CLI and JSON contract (1.x)
 
+The contract is versioned by the JSON `schemaVersion` (currently 1) and holds from this release on; dolly's own version number may still be 0.x.
+
 Within 1.x, these do not change incompatibly: the `analyze` command and the
 flags below, the exit codes, the JSON field names, and the fingerprint.
+
+JSON goes to stdout; stderr is free-form text, so do not merge the two. A document without `schemaVersion` is not a 1.x report.
+
+Outside the freeze: flags not listed in this section, `--semantic` and other experimental options, other subcommands, and the DollyCore library API.
 
 ### Stable surface
 
@@ -72,7 +78,7 @@ flags below, the exit codes, the JSON field names, and the fingerprint.
 | `--strict` | fail on any warning or error; notes never fail |
 | `--include`, `--exclude` | region filters: `preview`, `debug`, `test`, `mock`, `generated`, `script`, `all` |
 
-### Exit codes
+### Exit codes (stable)
 
 | Code | Meaning |
 |------|---------|
@@ -92,8 +98,10 @@ summary count. Scope entries are canonicalized like finding paths, so
 reports nothing and exits 0. See [Scope-file hygiene](#scope-file-hygiene).
 
 A clone group in scope only through a non-anchor member is reported at that
-member, with the original anchor first in `related`. Its `fingerprint` and
-`fingerprintAnchor` stay those of the original anchor, so baselines keep matching.
+member, with the original anchor first in `related`. Its `fingerprint` still
+hashes the original anchor (`fingerprintAnchor`), so baselines keep matching.
+`fingerprintAnchor` is carried for provenance (to tell a moved finding), not for
+recomputing fingerprints.
 
 ### JSON report
 
@@ -103,7 +111,7 @@ member, with the original anchor first in `related`. Its `fingerprint` and
 |-----------------|---------|
 | `schemaVersion` | `1`, shared by arcleak, dolly and deadwood |
 | `findings`, `outOfScope` | findings to act on; findings outside `--only` |
-| `suppressed` | findings silenced by a directive, each `{finding, reason}` |
+| `suppressed` | findings silenced by a directive, each `{finding, reason}`; `reason` is optional (omitted when the directive gave none) |
 | `degradedFiles` | files skipped or read with errors, each `{path, detail}` |
 | `analyzedFileCount`, `cacheHits`, `cacheMisses` | counts for the run |
 | `wasCancelled` | always `false` in printed output (a cancelled run prints nothing) |
@@ -113,7 +121,7 @@ member, with the original anchor first in `related`. Its `fingerprint` and
 |---------------|---------|
 | `rule` | `exact-clone`, `near-clone`, `structural-clone` or `semantic-clone` |
 | `severity` | `note`, `warning` or `error` |
-| `path`, `line`, `column` | the anchor; `line` is 1-based, `column` counts UTF-8 bytes |
+| `path`, `line`, `column` | the reported location: the group's anchor, unless `--only` moved it (then `fingerprintAnchor` is set and `related[0]` is the old anchor). `line` is 1-based, `column` counts UTF-8 bytes |
 | `message`, `note` | one-line description; `note` is optional (clone groups list `duplicates: …`) |
 | `related` | optional `[{path, line, column}]`, the other members; omitted when empty |
 | `fingerprint` | stable identity hash; baselines match on it |
@@ -127,7 +135,7 @@ changes. Rule ids are an open set: a new rule can appear in any 1.x release, so
 consumers must handle unknown rule ids. Consumers ignore unknown fields and
 reject a higher `schemaVersion`.
 
-### Facts cache
+### Facts cache and parallel jobs
 
 The default is `~/Library/Caches/dolly/<workspace>/facts.json` on macOS, where
 `<workspace>` hashes the repository root found from the working directory (the
@@ -218,7 +226,7 @@ dolly analyze --semantic --semantic-max-group 25 .     # cap group size (default
   `--semantic`, output is byte-identical to the token-only default.
 
 `semantic-clone` findings reuse the clone-group shape: one finding per
-group, anchored at the first member, with every other member in the note
+group, anchored at the first member (or, with `--only`, at the first member inside the scope), with every other member in the note
 and as SARIF `relatedLocations` / JSON `related`.
 
 ### Facts cache
