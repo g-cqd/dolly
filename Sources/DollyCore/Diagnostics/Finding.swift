@@ -1,3 +1,5 @@
+public import ProjectModel
+
 /// A location related to a finding — for clone groups, one per group
 /// member beyond the anchor.
 public struct RelatedLocation: Sendable, Equatable, Codable {
@@ -56,6 +58,11 @@ public struct Finding: Sendable, Equatable {
     self.related = related
     self.fingerprintPath = fingerprintPath
   }
+}
+
+extension Finding: ScopedFinding {
+  /// The paths of the other clone-group members, so a scope matches by any member.
+  public var relatedPaths: [String] { related.map(\.path) }
 }
 
 extension Finding: Comparable {

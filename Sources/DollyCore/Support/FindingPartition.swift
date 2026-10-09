@@ -1,11 +1,9 @@
 extension Array {
   /// One-pass split by a predicate, preserving relative order in both halves.
   ///
-  /// `Baseline.filter` and `ReportScope.filter` are the same partition wearing
-  /// different names for the two halves; dolly flags the duplication if they
-  /// each write the loop out. Named after the swift-algorithms (and
-  /// future-stdlib) `partitioned(by:)`, matching its convention that the
-  /// non-matching half comes first.
+  /// `Baseline.filter` splits findings with this. Named after the
+  /// swift-algorithms (and future-stdlib) `partitioned(by:)`, matching its
+  /// convention that the non-matching half comes first.
   func partitioned(
     by belongsInSecond: (Element) -> Bool
   ) -> (rest: [Element], matching: [Element]) {

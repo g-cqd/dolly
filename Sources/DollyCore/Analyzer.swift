@@ -1,4 +1,4 @@
-import ProjectModel
+public import ProjectModel
 import SwiftParser
 import SwiftSyntax
 
@@ -29,8 +29,14 @@ public struct Analyzer: Sendable {
   /// is off and analysis is byte-identical to the structural-only default.
   public let semantic: SemanticOptions?
 
-  /// Narrows the *report* to a set of files; nil reports everything. Detection
-  /// always runs over the whole corpus either way — see ``ReportScope``.
+  /// Narrows the *report* to a set of files; nil reports everything. The corpus
+  /// is never scoped: analyzing only changed files loses real clones (the partner
+  /// lives in an untouched file) and invents others the full corpus attributes
+  /// elsewhere, so only the report is filtered. A finding is kept when its anchor
+  /// or any clone-group member is in scope, since the anchor (the smallest member)
+  /// is arbitrary against a diff. The anchor is not moved: re-anchoring would change
+  /// `Finding.fingerprint`, and scoped runs must keep matching unscoped baselines.
+  /// The contract is ``ProjectModel/ReportScope``.
   public let reportScope: ReportScope?
 
   public init(

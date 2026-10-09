@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import ProjectModel
 import Testing
 
 /// Report scoping narrows what a run *reports*, never what it analyzes. These
@@ -108,5 +109,15 @@ import Testing
     // this is what lets a scoped CI run share a baseline with an unscoped one.
     #expect(report.findings.map(\.fingerprint) == unscoped.findings.map(\.fingerprint))
     #expect(report.outOfScope.isEmpty)
+  }
+
+  @Test("A finding conforms to the shared scope through its related members")
+  func findingConformsThroughRelatedMembers() {
+    let finding = Finding(
+      rule: .exactClone, severity: .warning, path: "/nowhere/Anchor.swift",
+      line: 1, column: 1, message: "duplicate",
+      related: [RelatedLocation(path: "/nowhere/Member.swift", line: 1, column: 1)]
+    )
+    #expect(ReportScope(files: ["/nowhere/Member.swift"]).contains(finding))
   }
 }
