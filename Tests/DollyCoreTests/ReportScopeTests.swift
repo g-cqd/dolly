@@ -83,15 +83,24 @@ import Testing
 
   @Test("A re-anchored finding fingerprints as it does in an unscoped run")
   func reanchoredFingerprintMatchesUnscoped() async throws {
-    let corpus = try files(in: "CrossFileExact")
+    // The fixture is copied into a checkout of its own: the built resource bundle
+    // lies inside a repository only when the scratch path happens to, so a fresh
+    // `--scratch-path` under $TMPDIR would leave nothing to anchor to.
+    let checkout = try TemporaryTestDirectory(prefix: "dolly-reanchor")
+    defer { withExtendedLifetime(checkout) {} }
+    try Data().write(to: checkout.url.appending(path: ".git"))
+    let corpus = try files(in: "CrossFileExact").map { source in
+      let copy = checkout.url.appending(path: URL(fileURLWithPath: source).lastPathComponent)
+      try FileManager.default.copyItem(at: URL(fileURLWithPath: source), to: copy)
+      return copy.path
+    }
     let unscoped = await Analyzer().analyze(files: corpus)
     let partner = try #require(unscoped.findings.first?.related.first).path
     let scoped = await Analyzer(reportScope: ReportScope(files: [partner])).analyze(files: corpus)
 
     #expect(scoped.findings.map(\.fingerprint) == unscoped.findings.map(\.fingerprint))
     // The repository-relative spelling the fingerprint hashes is the original anchor's.
-    let anchoredPath = try #require(scoped.findings.first?.fingerprintPath)
-    #expect(!anchoredPath.hasPrefix("/"))
+    #expect(scoped.findings.first?.fingerprintPath == "A.swift")
     #expect(scoped.findings.map(\.fingerprintPath) == unscoped.findings.map(\.fingerprintPath))
     // `--relative-to` rewrites the fingerprint spelling too, so it still matches.
     let root = URL(fileURLWithPath: corpus[0]).deletingLastPathComponent().path
