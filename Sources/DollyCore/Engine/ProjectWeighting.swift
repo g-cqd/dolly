@@ -66,7 +66,8 @@ enum ProjectWeighting {
       note: (finding.note.map { $0 + " — " } ?? "")
         + "test code only: repetition keeps each test readable on its own; factor it out if it hides intent",
       related: finding.related,
-      fingerprintPath: finding.fingerprintPath
+      fingerprintPath: finding.fingerprintPath,
+      fingerprintAnchor: finding.fingerprintAnchor
     )
   }
 
