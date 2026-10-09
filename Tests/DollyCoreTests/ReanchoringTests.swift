@@ -19,7 +19,7 @@ import Testing
 
   @Test("Re-anchoring keeps the other members in order, with the old anchor first")
   func otherMembersKeepTheirOrder() {
-    let moved = Self.threeWay.anchored(in: ReportScope(files: ["/repo/C.swift"]))
+    let moved = Self.threeWay.reanchored(in: ReportScope(files: ["/repo/C.swift"]))
     #expect(moved.path == "/repo/C.swift")
     #expect(moved.line == 7)
     #expect(
@@ -34,7 +34,7 @@ import Testing
 
   @Test("A re-anchored finding keeps the fingerprint of its original anchor")
   func reanchoredFingerprintHashesOriginalAnchor() {
-    let moved = Self.threeWay.anchored(in: ReportScope(files: ["/repo/C.swift"]))
+    let moved = Self.threeWay.reanchored(in: ReportScope(files: ["/repo/C.swift"]))
     #expect(moved.fingerprintAnchor == RelatedLocation(path: "/repo/A.swift", line: 1, column: 1))
     #expect(moved.fingerprint == Self.threeWay.fingerprint)
   }
