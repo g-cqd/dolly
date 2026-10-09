@@ -55,9 +55,8 @@ jobs:
 
   macos:
     runs-on: macos-26
-    # continue-on-error so a macOS post-run stall can never block the Linux
-    # binary: publish treats this job as satisfied and ships whatever built.
-    continue-on-error: true
+    # The macOS arm64 binary is the primary artifact, so a failed or stalled
+    # macOS job fails the release (its timeouts still bound a stall).
     # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
     timeout-minutes: 30
     steps:
@@ -159,10 +158,8 @@ jobs:
           exit 0
 
   publish:
-    # macOS is continue-on-error, so `needs` treats it as satisfied even if it
-    # stalled or failed — publish then ships whatever artifacts exist (Linux
-    # always; macOS when it built). A single-platform stall never blocks a
-    # release.
+    # Needs both jobs to succeed: the macOS arm64 binary is required, so a
+    # release never ships Linux only.
     needs: [linux, macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
@@ -184,6 +181,9 @@ jobs:
           BUNDLE="dolly.artifactbundle"
           mkdir -p "$BUNDLE"
           variants=""
+          # Matches the plain binary only: `dolly-full-*` also ends in
+          # -macos-arm64.tar.gz, so the version digit anchors past it.
+          ls dolly-[0-9]*-macos-arm64.tar.gz >/dev/null 2>&1 || { echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"; exit 1; }
           for archive in dolly-*-macos-arm64.tar.gz dolly-*-linux-x86_64.tar.gz; do
             name="${archive%.tar.gz}"
             case "$name" in
@@ -205,8 +205,8 @@ jobs:
             variants="$variants{\"path\":\"$name/bin/dolly\",\"supportedTriples\":[\"$triple\"]},"
           done
           if [ -z "$variants" ]; then
-            echo "::warning::no platform archives to bundle"
-            exit 0
+            echo "::error::no platform archives to bundle"
+            exit 1
           fi
           printf '{"schemaVersion":"1.0","artifacts":{"dolly":{"type":"executable","version":"%s","variants":[%s]}}}\n' \
             "$VERSION" "${variants%,}" > "$BUNDLE/info.json"
@@ -214,8 +214,9 @@ jobs:
           # SwiftPM checksums the zip with `swift package compute-checksum`,
           # which is a plain SHA-256 of the file.
           sha256sum "dolly-$VERSION.artifactbundle.zip" > "dolly-$VERSION.artifactbundle.zip.sha256"
+          sha256sum -c "dolly-$VERSION.artifactbundle.zip.sha256"
 
-      - name: Create or update release with whatever binaries built
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -226,8 +227,9 @@ jobs:
             echo "::error::no release artifacts built on any platform"
             exit 1
           fi
-          if ! ls dolly-*-macos-arm64.tar.gz >/dev/null 2>&1; then
-            echo "::warning::no macOS artifact — publishing Linux only (macOS lane failed/stalled)"
+          if ! ls dolly-[0-9]*-macos-arm64.tar.gz >/dev/null 2>&1; then
+            echo "::error::no macOS arm64 archive; refusing to publish Linux only"
+            exit 1
           fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
