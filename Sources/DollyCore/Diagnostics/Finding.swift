@@ -85,7 +85,7 @@ public struct Finding: Sendable, Equatable {
   /// the original anchor (`fingerprintAnchor`). Any other finding is returned
   /// unchanged.
   /// - Complexity: O(m) for m related locations.
-  func anchored(in scope: ReportScope) -> Finding {
+  func reanchored(in scope: ReportScope) -> Finding {
     guard !scope.files.contains(path),
       let index = related.firstIndex(where: { scope.files.contains($0.path) })
     else { return self }
@@ -95,14 +95,12 @@ public struct Finding: Sendable, Equatable {
     members.remove(at: index)
     let reanchored = [original] + members
 
-    func duplicatesNote(_ locations: [RelatedLocation]) -> String {
-      "duplicates: " + locations.map { "\($0.path):\($0.line)" }.joined(separator: ", ")
-    }
-    let previousList = duplicatesNote(related)
-    let rebuiltNote = note.map { (text: String) -> String in
-      // CloneReporting wrote the list from `related`. Anything else is left as it is.
-      guard text.hasPrefix(previousList) else { return text }
-      return duplicatesNote(reanchored) + String(text.dropFirst(previousList.count))
+    // CloneReporting wrote the list from `related`. Anything else is left as it is.
+    let previousList = CloneReporting.duplicatesList(related)
+    let newList = CloneReporting.duplicatesList(reanchored)
+    var rebuilt = note
+    if let text = note, text.hasPrefix(previousList) {
+      rebuilt = newList + text.dropFirst(previousList.count)
     }
     return Finding(
       rule: rule,
@@ -111,7 +109,7 @@ public struct Finding: Sendable, Equatable {
       line: primary.line,
       column: primary.column,
       message: message,
-      note: rebuiltNote,
+      note: rebuilt,
       related: reanchored,
       fingerprintPath: fingerprintPath,
       fingerprintAnchor: fingerprintAnchor ?? original

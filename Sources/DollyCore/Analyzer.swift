@@ -36,7 +36,7 @@ public struct Analyzer: Sendable {
   /// or any clone-group member is in scope, since the anchor (the smallest member)
   /// is arbitrary against a diff. When the anchor is out of scope but a member is
   /// in scope, the reported location moves to that member (see
-  /// `Finding.anchored(in:)`), so a PR bot can comment on the changed file. The
+  /// `Finding.reanchored(in:)`), so a PR bot can comment on the changed file. The
   /// fingerprint stays on the original anchor (`Finding.fingerprintAnchor`), so
   /// scoped runs keep matching unscoped baselines.
   /// The contract is ``ProjectModel/ReportScope``.
@@ -302,7 +302,7 @@ public struct Analyzer: Sendable {
       } else {
         // An in-scope group whose anchor is out of scope is shown at its first
         // in-scope member, the location a PR bot can comment on.
-        report.findings.append(reportScope.map { finding.anchored(in: $0) } ?? finding)
+        report.findings.append(reportScope.map { finding.reanchored(in: $0) } ?? finding)
       }
     }
   }
