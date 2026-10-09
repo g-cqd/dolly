@@ -36,6 +36,14 @@ public struct Finding: Sendable, Equatable {
   /// forgetting it can no longer silently invalidate a baseline. nil outside a
   /// repository, where `path` is hashed as before.
   public let fingerprintPath: String?
+  /// The original anchor when the reported location was moved into the report
+  /// scope; the fingerprint hashes it instead of the reported location. nil when
+  /// unmoved.
+  ///
+  /// A clone group anchors at its smallest member, which a scoped run may not
+  /// report. Hashing the original anchor keeps the fingerprint what the group
+  /// gets in an unscoped run, so scoped runs keep matching unscoped baselines.
+  public let fingerprintAnchor: RelatedLocation?
 
   public init(
     rule: RuleID,
@@ -46,8 +54,9 @@ public struct Finding: Sendable, Equatable {
     message: String,
     note: String? = nil,
     related: [RelatedLocation] = [],
-    fingerprintPath: String? = nil
-  ) {
+    fingerprintPath: String? = nil,
+    fingerprintAnchor: RelatedLocation? = nil
+  ) {  // @dl:accept -- a plain memberwise initializer, one assignment per stored property
     self.rule = rule
     self.severity = severity
     self.path = path
@@ -57,6 +66,56 @@ public struct Finding: Sendable, Equatable {
     self.note = note
     self.related = related
     self.fingerprintPath = fingerprintPath
+    self.fingerprintAnchor = fingerprintAnchor
+  }
+
+  /// The location the fingerprint hashes: the original anchor when the reported
+  /// location was moved, otherwise the reported location itself.
+  var fingerprintLocation: RelatedLocation {
+    fingerprintAnchor ?? RelatedLocation(path: path, line: line, column: column)
+  }
+
+  /// The finding as a report scoped to `scope` shows it.
+  ///
+  /// When the anchor is out of scope but a related member is in scope, the
+  /// reported location moves to the first such member, so an inline comment
+  /// lands on a changed file. The old anchor becomes the first related location,
+  /// the other members keep their order, and the note's duplicates list is
+  /// rebuilt to match; any region tag after it is kept. The fingerprint stays on
+  /// the original anchor (`fingerprintAnchor`). Any other finding is returned
+  /// unchanged.
+  /// - Complexity: O(m) for m related locations.
+  func anchored(in scope: ReportScope) -> Finding {
+    guard !scope.files.contains(path),
+      let index = related.firstIndex(where: { scope.files.contains($0.path) })
+    else { return self }
+    let original = RelatedLocation(path: path, line: line, column: column)
+    let primary = related[index]
+    var members = related
+    members.remove(at: index)
+    let reanchored = [original] + members
+
+    func duplicatesNote(_ locations: [RelatedLocation]) -> String {
+      "duplicates: " + locations.map { "\($0.path):\($0.line)" }.joined(separator: ", ")
+    }
+    let previousList = duplicatesNote(related)
+    let rebuiltNote = note.map { (text: String) -> String in
+      // CloneReporting wrote the list from `related`. Anything else is left as it is.
+      guard text.hasPrefix(previousList) else { return text }
+      return duplicatesNote(reanchored) + String(text.dropFirst(previousList.count))
+    }
+    return Finding(
+      rule: rule,
+      severity: severity,
+      path: primary.path,
+      line: primary.line,
+      column: primary.column,
+      message: message,
+      note: rebuiltNote,
+      related: reanchored,
+      fingerprintPath: fingerprintPath,
+      fingerprintAnchor: fingerprintAnchor ?? original
+    )
   }
 }
 
@@ -77,7 +136,8 @@ extension Finding: Comparable {
 
 extension Finding: Codable {
   private enum CodingKeys: String, CodingKey {
-    case rule, severity, path, line, column, message, note, related, fingerprintPath, fingerprint
+    case rule, severity, path, line, column, message, note, related, fingerprintPath
+    case fingerprintAnchor, fingerprint
   }
 
   public init(from decoder: any Decoder) throws {
@@ -91,7 +151,9 @@ extension Finding: Codable {
       message: try container.decode(String.self, forKey: .message),
       note: try container.decodeIfPresent(String.self, forKey: .note),
       related: try container.decodeIfPresent([RelatedLocation].self, forKey: .related) ?? [],
-      fingerprintPath: try container.decodeIfPresent(String.self, forKey: .fingerprintPath)
+      fingerprintPath: try container.decodeIfPresent(String.self, forKey: .fingerprintPath),
+      fingerprintAnchor: try container.decodeIfPresent(
+        RelatedLocation.self, forKey: .fingerprintAnchor)
     )
     // fingerprint is derived — ignored on decode, recomputed on access.
   }
@@ -108,6 +170,7 @@ extension Finding: Codable {
     if !related.isEmpty {
       try container.encode(related, forKey: .related)
     }
+    try container.encodeIfPresent(fingerprintAnchor, forKey: .fingerprintAnchor)
     try container.encode(fingerprint, forKey: .fingerprint)
   }
 }

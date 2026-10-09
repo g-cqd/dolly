@@ -34,8 +34,11 @@ public struct Analyzer: Sendable {
   /// lives in an untouched file) and invents others the full corpus attributes
   /// elsewhere, so only the report is filtered. A finding is kept when its anchor
   /// or any clone-group member is in scope, since the anchor (the smallest member)
-  /// is arbitrary against a diff. The anchor is not moved: re-anchoring would change
-  /// `Finding.fingerprint`, and scoped runs must keep matching unscoped baselines.
+  /// is arbitrary against a diff. When the anchor is out of scope but a member is
+  /// in scope, the reported location moves to that member (see
+  /// `Finding.anchored(in:)`), so a PR bot can comment on the changed file. The
+  /// fingerprint stays on the original anchor (`Finding.fingerprintAnchor`), so
+  /// scoped runs keep matching unscoped baselines.
   /// The contract is ``ProjectModel/ReportScope``.
   public let reportScope: ReportScope?
 
@@ -297,7 +300,9 @@ public struct Analyzer: Sendable {
         // suppression debt keeps counting the whole corpus.
         report.outOfScope.append(finding)
       } else {
-        report.findings.append(finding)
+        // An in-scope group whose anchor is out of scope is shown at its first
+        // in-scope member, the location a PR bot can comment on.
+        report.findings.append(reportScope.map { finding.anchored(in: $0) } ?? finding)
       }
     }
   }
