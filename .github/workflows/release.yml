@@ -49,6 +49,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux
+          if-no-files-found: error
           path: |
             dolly-*.tar.gz
             dolly-*.sha256
@@ -58,6 +59,7 @@ jobs:
     # The macOS arm64 binary is the primary artifact, so a failed or stalled
     # macOS job fails the release (its timeouts still bound a stall).
     # Same stall countermeasures as CI: pipe isolation, step bounds, job bound.
+    # A stalled macOS job now fails the release; recover with "Re-run failed jobs" (the Linux artifact persists).
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -74,6 +76,7 @@ jobs:
           status=$?
           cat build.log
           [ $status -ne 0 ] && exit $status
+          set -e
           BIN="$(swift build -c release --show-bin-path)/dolly"
           VERSION="$("$BIN" --version)"
           TAG="${GITHUB_REF_NAME#v}"
@@ -145,6 +148,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos
+          if-no-files-found: error
           path: |
             dolly-*.tar.gz
             dolly-*.sha256
@@ -183,7 +187,13 @@ jobs:
           variants=""
           # Matches the plain binary only: `dolly-full-*` also ends in
           # -macos-arm64.tar.gz, so the version digit anchors past it.
-          ls dolly-[0-9]*-macos-arm64.tar.gz >/dev/null 2>&1 || { echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"; exit 1; }
+          macos_archives=(dolly-[0-9]*-macos-arm64.tar.gz)
+          if [ ${#macos_archives[@]} -eq 0 ]; then
+            echo "::error::no macOS arm64 archive; refusing to publish without the primary artifact"
+            exit 1
+          fi
+          # Verify the downloaded per-platform archives before anything is unpacked.
+          for s in dolly-*.tar.gz.sha256; do sha256sum -c "$s"; done
           for archive in dolly-*-macos-arm64.tar.gz dolly-*-linux-x86_64.tar.gz; do
             name="${archive%.tar.gz}"
             case "$name" in
@@ -214,7 +224,6 @@ jobs:
           # SwiftPM checksums the zip with `swift package compute-checksum`,
           # which is a plain SHA-256 of the file.
           sha256sum "dolly-$VERSION.artifactbundle.zip" > "dolly-$VERSION.artifactbundle.zip.sha256"
-          sha256sum -c "dolly-$VERSION.artifactbundle.zip.sha256"
 
       - name: Create or update release
         env:
@@ -225,10 +234,6 @@ jobs:
           assets=(dolly-*.tar.gz dolly-*.artifactbundle.zip dolly-*.sha256)
           if [ ${#assets[@]} -eq 0 ]; then
             echo "::error::no release artifacts built on any platform"
-            exit 1
-          fi
-          if ! ls dolly-[0-9]*-macos-arm64.tar.gz >/dev/null 2>&1; then
-            echo "::error::no macOS arm64 archive; refusing to publish Linux only"
             exit 1
           fi
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
