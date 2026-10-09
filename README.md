@@ -256,8 +256,39 @@ the run that produced them.
 }
 ```
 
-Unknown rule ids fail closed. `minimumTokens` (1...10000) is the clone
-floor; `minimumSimilarity` (0...1) gates near/structural similarity.
+Unknown rule ids fail closed. The thresholds and severities are below.
+
+### Thresholds and severities
+
+| Setting | Default | Allowed | What it does |
+|---|---|---|---|
+| `duplication.minimumTokens` | `50` | `1`–`10000` | the clone floor for the exact, near and structural rules |
+| `duplication.minimumSimilarity` | `0.8` | `0.0`–`1.0` | the similarity floor for `structural-clone` |
+| `rules.<id>.severity` | `warning` | `note`, `warning`, `error` | the severity of that rule's findings; each of the four rules defaults to `warning` |
+| `rules.<id>.enabled` | `true` | `true`, `false` | whether the rule runs; `semantic-clone` also needs `--semantic` |
+
+A value outside its allowed range, or an unknown severity, exits 78.
+
+- `near-clone` does not use `minimumSimilarity`: the default engine matches
+  near clones exactly after normalizing identifiers and literals. dolly passes
+  the configured similarity to the structural detector, so that detector's own
+  `0.5` default never applies, and the configured value (default `0.8`) is the
+  one in force.
+- A group found only in test code is a note whatever its severity, unless
+  `--include test` is given ([Where duplication lives](#where-duplication-lives)).
+- `Configuration` has no other numeric setting. Numeric options such as
+  `--semantic-max-group` (default 25) are command-line flags, not configuration.
+
+Recommended values for app code:
+
+- **CI gate: keep 50 tokens and 0.8 similarity.** Fail the gate on `exact-clone`
+  only, as in the [Gating policy](#gating-policy) mapping, and leave the other
+  rules at `warning`.
+- **Large apps with noisy boilerplate: raise `minimumTokens`** (for example to 80
+  or 100) rather than lowering the gate. Measure the finding count on your own
+  tree before you pick a value; these are starting points, not measured optima.
+- **Structural noise: raise `minimumSimilarity`** toward 0.9 for boilerplate-heavy
+  code. Lowering it adds findings, which is the wrong direction for a gate.
 
 ## Recommended configuration for real-world use
 
@@ -491,10 +522,15 @@ byte-identical token sequences, no threshold and no judgement — and leave
   "rules": {
     "exact-clone":      { "severity": "error" },
     "near-clone":       { "severity": "warning" },
-    "structural-clone": { "severity": "warning" }
-  }
+    "structural-clone": { "severity": "warning" },
+    "semantic-clone":   { "severity": "warning" }
+  },
+  "duplication": { "minimumTokens": 50, "minimumSimilarity": 0.8 }
 }
 ```
+
+The `duplication` block states the defaults, so a later change is visible in
+review; see [Thresholds and severities](#thresholds-and-severities).
 
 Then run **without** `--strict`: dolly exits `1` on errors only. Measured on a
 39-finding corpus, that gates on 11 objective findings while still reporting
