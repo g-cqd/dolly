@@ -96,6 +96,23 @@ import Testing
     #expect(result.partialFingerprints == ["dolly/v1": Self.subdirectoryPair.fingerprint])
   }
 
+  @Test("Findings with one anchor and rule sort by fingerprint, whatever the input order")
+  func sameAnchorAndRuleSortByFingerprint() {
+    // The message is hashed into the fingerprint but is not a sort key, so these
+    // two differ only in the fingerprint.
+    let first = Finding(
+      rule: .exactClone, severity: .warning, path: "/repo/A.swift", line: 1, column: 1,
+      message: "duplicate of one block")
+    let second = Finding(
+      rule: .exactClone, severity: .warning, path: "/repo/A.swift", line: 1, column: 1,
+      message: "duplicate of another block")
+    let (lower, higher) =
+      first.fingerprint < second.fingerprint ? (first, second) : (second, first)
+    #expect(lower.fingerprint != higher.fingerprint)
+    #expect([higher, lower].sorted() == [lower, higher])
+    #expect([lower, higher].sorted() == [lower, higher])
+  }
+
   /// The parts of a SARIF log these tests read. Decoded by hand because the
   /// shared `SarifLog` type does not carry `partialFingerprints`.
   private struct SarifEntries: Decodable {
