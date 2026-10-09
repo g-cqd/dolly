@@ -123,12 +123,13 @@ extension Finding: ScopedFinding {
 }
 
 extension Finding: Comparable {
-  /// Deterministic report ordering: path, then position, then rule.
+  /// Deterministic report ordering: path, then position, then rule, then fingerprint.
+  /// The fingerprint breaks ties between same-rule groups that share an anchor.
   public static func < (lhs: Finding, rhs: Finding) -> Bool {
     if lhs.path != rhs.path { return lhs.path < rhs.path }
     if lhs.line != rhs.line { return lhs.line < rhs.line }
     if lhs.column != rhs.column { return lhs.column < rhs.column }
-    return lhs.rule.rawValue < rhs.rule.rawValue
+    return (lhs.rule.rawValue, lhs.fingerprint) < (rhs.rule.rawValue, rhs.fingerprint)
   }
 }
 
