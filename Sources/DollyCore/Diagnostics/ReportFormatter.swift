@@ -1,3 +1,5 @@
+import ProjectModel
+
 #if canImport(FoundationEssentials)
   import FoundationEssentials
 #else
@@ -61,8 +63,19 @@ public enum ReportFormatter {
     return lines.joined(separator: "\n")
   }
 
+  /// The JSON report: the analysis report's fields plus the shared contract version.
+  private struct VersionedReport: Encodable {
+    let report: AnalysisReport
+    private enum CodingKeys: String, CodingKey { case schemaVersion }
+    func encode(to encoder: any Encoder) throws {
+      try report.encode(to: encoder)
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(ReportSchema.version, forKey: .schemaVersion)
+    }
+  }
+
   private static func json(_ report: AnalysisReport) -> String {
-    encodeJSON(report)
+    encodeJSON(VersionedReport(report: report))
   }
 
   /// Deterministic pretty-printed JSON for report payloads; encoding a
