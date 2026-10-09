@@ -37,6 +37,8 @@ import Testing
     let report = await Analyzer(reportScope: ReportScope(files: [anchor]))
       .analyze(files: corpus)
     #expect(report.findings.map(\.fingerprint) == unscoped.findings.map(\.fingerprint))
+    // The anchor is in scope, so nothing moves: the finding is the unscoped one.
+    #expect(report.findings == unscoped.findings)
     #expect(report.outOfScope.isEmpty)
   }
 
@@ -55,6 +57,59 @@ import Testing
     let report = await Analyzer(reportScope: ReportScope(files: [partner]))
       .analyze(files: corpus)
     #expect(report.findings.map(\.fingerprint) == [finding.fingerprint])
+  }
+
+  @Test("Scoping only a non-anchor member reports the finding at that member")
+  func relatedMemberBecomesReportedLocation() async throws {
+    // The group is shown where the change is, so a PR bot can comment inline.
+    // The old anchor moves to the front of the related locations, and the note
+    // names it rather than the new location.
+    let corpus = try files(in: "CrossFileExact")
+    let unscoped = await Analyzer().analyze(files: corpus)
+    let anchor = try #require(unscoped.findings.first)
+    let partner = try #require(anchor.related.first)
+
+    let report = await Analyzer(reportScope: ReportScope(files: [partner.path]))
+      .analyze(files: corpus)
+    let finding = try #require(report.findings.first)
+    #expect(report.findings.count == 1)
+    #expect(finding.path == partner.path)
+    #expect(finding.line == partner.line)
+    #expect(finding.column == partner.column)
+    let oldAnchor = RelatedLocation(path: anchor.path, line: anchor.line, column: anchor.column)
+    #expect(finding.related == [oldAnchor])
+    #expect(finding.note == "duplicates: \(anchor.path):\(anchor.line)")
+  }
+
+  @Test("A re-anchored finding fingerprints as it does in an unscoped run")
+  func reanchoredFingerprintMatchesUnscoped() async throws {
+    let corpus = try files(in: "CrossFileExact")
+    let unscoped = await Analyzer().analyze(files: corpus)
+    let partner = try #require(unscoped.findings.first?.related.first).path
+    let scoped = await Analyzer(reportScope: ReportScope(files: [partner])).analyze(files: corpus)
+
+    #expect(scoped.findings.map(\.fingerprint) == unscoped.findings.map(\.fingerprint))
+    // The repository-relative spelling the fingerprint hashes is the original anchor's.
+    let anchoredPath = try #require(scoped.findings.first?.fingerprintPath)
+    #expect(!anchoredPath.hasPrefix("/"))
+    #expect(scoped.findings.map(\.fingerprintPath) == unscoped.findings.map(\.fingerprintPath))
+    // `--relative-to` rewrites the fingerprint spelling too, so it still matches.
+    let root = URL(fileURLWithPath: corpus[0]).deletingLastPathComponent().path
+    #expect(
+      scoped.relativized(to: root).findings.map(\.fingerprint)
+        == unscoped.relativized(to: root).findings.map(\.fingerprint))
+  }
+
+  @Test("A baseline from an unscoped run filters the re-anchored finding")
+  func baselineFiltersReanchoredFinding() async throws {
+    let corpus = try files(in: "CrossFileExact")
+    let unscoped = await Analyzer().analyze(files: corpus)
+    let partner = try #require(unscoped.findings.first?.related.first).path
+    let scoped = await Analyzer(reportScope: ReportScope(files: [partner])).analyze(files: corpus)
+
+    let split = Baseline(findings: unscoped.findings).filter(scoped.findings)
+    #expect(split.kept.isEmpty)
+    #expect(split.baselined.count == 1)
   }
 
   @Test("A file with no findings scopes everything else out, corpus intact")
@@ -98,8 +153,8 @@ import Testing
     #expect(report.findings.map(\.fingerprint) == unscoped.findings.map(\.fingerprint))
   }
 
-  @Test("Scoping never invents or moves a finding relative to an unscoped run")
-  func scopedFindingsAreASubsetOfUnscoped() async throws {
+  @Test("Scoping never invents a finding and never changes a fingerprint")
+  func scopingNeverInventsAFinding() async throws {
     let corpus = try files(in: "StructuralPair")
     let unscoped = await Analyzer().analyze(files: corpus)
     let everything = ReportScope(files: corpus)
