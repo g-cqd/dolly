@@ -121,9 +121,11 @@ member, with the original anchor first in `related`. Its `fingerprint` and
 
 `fingerprintPath` is never emitted, although the decoder reads it.
 
-`schemaVersion` changes only on a breaking change: a field removed, renamed,
-retyped or made required; a meaning changed; or a closed value set (rule ids,
-severities) changed. Consumers ignore unknown fields and reject a higher version.
+`schemaVersion` changes only when a field is removed, renamed, retyped, made
+required or optional, or changes meaning, or the closed set of severities
+changes. Rule ids are an open set: a new rule can appear in any 1.x release, so
+consumers must handle unknown rule ids. Consumers ignore unknown fields and
+reject a higher `schemaVersion`.
 
 ### Facts cache
 
