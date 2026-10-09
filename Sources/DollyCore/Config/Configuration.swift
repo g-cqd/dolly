@@ -27,7 +27,8 @@ public struct Configuration: Sendable, Codable, Equatable {
   public struct DuplicationSettings: Sendable, Codable, Equatable {
     /// Minimum tokens for a region to count as a clone (1...10000).
     public var minimumTokens: Int?
-    /// Minimum similarity for near/structural clones (0.0...1.0).
+    /// Minimum similarity for structural clones (0.0...1.0). The default
+    /// engine's near-clone pass ignores it.
     public var minimumSimilarity: Double?
 
     public init(minimumTokens: Int? = nil, minimumSimilarity: Double? = nil) {
