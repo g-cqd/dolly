@@ -175,4 +175,23 @@ import Testing
     )
     #expect(ReportScope(files: ["/nowhere/Member.swift"]).contains(finding))
   }
+
+  @Test("A suppressed group stays suppressed and unmoved when scoped to a non-anchor member")
+  func suppressedAnchorIsNotMovedByScope() async throws {
+    // The anchor's directive covers the group. Suppression is decided before
+    // scope, so scoping to the other member must neither move the group into
+    // `findings` nor send it to `outOfScope`.
+    let corpus = try files(in: "CrossFileSuppressed")
+    let unscoped = await Analyzer().analyze(files: corpus)
+    #expect(unscoped.findings.isEmpty)
+    #expect(unscoped.suppressed.count == 1)
+    let suppressed = try #require(unscoped.suppressed.first)
+    let partner = try #require(suppressed.finding.related.first).path
+
+    let scoped = await Analyzer(reportScope: ReportScope(files: [partner])).analyze(files: corpus)
+    #expect(scoped.findings.isEmpty)
+    #expect(scoped.outOfScope.isEmpty)
+    #expect(scoped.suppressed.map(\.finding) == unscoped.suppressed.map(\.finding))
+    #expect(scoped.suppressed.map(\.reason) == ["reviewed"])
+  }
 }
