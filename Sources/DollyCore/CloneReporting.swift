@@ -56,9 +56,9 @@ enum CloneReporting {
       let rule = Self.rule(for: group.type)
       let tokens = members.map(\.tokenCount).min() ?? anchor.tokenCount
       let similarity = formattedSimilarity(group.similarity)
-      let others = members.dropFirst()
-        .map { "\($0.file):\($0.startLine)" }
-        .joined(separator: ", ")
+      let related = members.dropFirst().map {
+        RelatedLocation(path: $0.file, line: $0.startLine, column: $0.startColumn)
+      }
       // Semantic groups are matched by embedding, not by a shared token
       // run, so "duplicated regions of ~N tokens" would misdescribe them;
       // every other rule keeps its v0.2.0 wording verbatim.
@@ -67,8 +67,8 @@ enum CloneReporting {
         ? "\(members.count) semantically similar regions (idiom-level, cosine \(similarity))"
         : "\(members.count) duplicated regions of ~\(tokens) tokens (similarity \(similarity))"
       let region = taggedRegion(of: members, contexts: contexts, regionSelection: regionSelection)
-      let note =
-        region.isEmpty ? "duplicates: \(others)" : "duplicates: \(others); region: \(region.names)"
+      let list = duplicatesList(related)
+      let note = region.isEmpty ? list : "\(list); region: \(region.names)"
       return Finding(
         rule: rule,
         severity: configuration.severity(for: rule),
@@ -77,11 +77,15 @@ enum CloneReporting {
         column: anchor.startColumn,
         message: message,
         note: note,
-        related: members.dropFirst().map {
-          RelatedLocation(path: $0.file, line: $0.startLine, column: $0.startColumn)
-        }
+        related: related
       )
     }
+  }
+
+  /// The note's list of the other members of a clone group, as `CloneReporting`
+  /// and re-anchoring write it.
+  static func duplicatesList(_ locations: [RelatedLocation]) -> String {
+    "duplicates: " + locations.map { "\($0.path):\($0.line)" }.joined(separator: ", ")
   }
 
   /// The `--include`d region(s), of generated or preview, that this group
