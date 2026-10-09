@@ -45,7 +45,8 @@ extension AnalysisReport {
 
 extension Finding {
   fileprivate func relativized(_ strip: (String) -> String) -> Finding {
-    Finding(
+    let fingerprintSource = fingerprintLocation.path
+    return Finding(
       rule: rule,
       severity: severity,
       path: strip(path),
@@ -65,8 +66,13 @@ extension Finding {
       // automatic anchor exactly.
       // When strip is a no-op — a root spelled through a symlink, a wrong
       // directory — keep the repo-anchored fingerprint rather than reverting to
-      // the absolute path the anchoring exists to remove.
-      fingerprintPath: strip(path) != path ? strip(path) : fingerprintPath
+      // the absolute path the anchoring exists to remove. A moved finding hashes
+      // its original anchor, so that is the path stripped here.
+      fingerprintPath: strip(fingerprintSource) != fingerprintSource
+        ? strip(fingerprintSource) : fingerprintPath,
+      fingerprintAnchor: fingerprintAnchor.map {
+        RelatedLocation(path: strip($0.path), line: $0.line, column: $0.column)
+      }
     )
   }
 }
@@ -87,7 +93,8 @@ extension AnalysisReport {
         message: finding.message,
         note: finding.note,
         related: finding.related,
-        fingerprintPath: RepositoryRoot.relativize(finding.path, to: root)
+        fingerprintPath: RepositoryRoot.relativize(finding.fingerprintLocation.path, to: root),
+        fingerprintAnchor: finding.fingerprintAnchor
       )
     }
     var copy = self
