@@ -1,93 +1,62 @@
 name: CI
 
+# The graph (lint, linux and macOS in parallel, release archives on main and tags, one required gate) lives in
+# the shared workflow; this file only says what is specific to dolly. A `v*` tag publishes the release.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
-# A push supersedes any still-running CI for the same ref: cancel it.
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
-# The package requires swift-tools 6.4, which no *released* toolchain ships
-# yet — so both lanes run a 6.4.x toolchain: Linux via the nightly-6.4.x
-# container (the REQUIRED gate), macOS via a dated 6.4.x dev-snapshot pkg
-# installed by the vendored ./.github/actions/setup-swift. Both lanes are on
-# the same 6.4.x branch, so they never disagree on language semantics.
 jobs:
-  linux:
-    runs-on: ubuntu-latest
-    container: swiftlang/swift:nightly-6.4.x-jammy
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Build (warnings are errors via package settings)
-        run: swift build --build-tests
-      - name: Tests
-        # --no-parallel: the nightly Linux concurrency runtime has crashed
-        # under swift-testing's parallel executor; serial is stable.
-        run: swift test --no-parallel
-      - name: Self-analysis
-        run: swift run dolly analyze Sources --strict
-      - name: swift-format lint
-        run: Scripts/lint-format.sh
-      - name: GCD prohibition
-        run: Scripts/no-gcd.sh
-      - name: Release binary
-        run: |
-          swift build -c release
-          BIN="$(swift build -c release --show-bin-path)/dolly"
-          "$BIN" --version
-          cp "$BIN" dolly
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dolly-${{ github.sha }}-linux-x86_64
-          path: dolly
-          retention-days: 14
-
-  macos:
-    runs-on: macos-26
-    # Informational until 6.4 GA reaches Xcode. Child-spawning steps write to
-    # files so no orphan can hold the runner's log pipe and hang post-run.
-    continue-on-error: true
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Install Swift 6.4 (vendored dated snapshot)
-        timeout-minutes: 10
-        uses: ./.github/actions/setup-swift
-      - name: Build & test
-        timeout-minutes: 15
-        run: |
-          set +e
-          { swift build --build-tests && swift test --no-parallel; } > build-test.log 2>&1 < /dev/null
-          status=$?
-          cat build-test.log
-          exit $status
-      - name: Release binary
-        run: |
-          set +e
-          swift build -c release > release-build.log 2>&1 < /dev/null
-          status=$?
-          cat release-build.log
-          [ $status -ne 0 ] && exit $status
-          cp "$(swift build -c release --show-bin-path)/dolly" dolly
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dolly-${{ github.sha }}-macos-arm64
-          path: dolly
-          retention-days: 14
-      - name: Straggler census and reap
-        if: always()
-        run: |
-          echo "toolchain processes still alive:"
-          pgrep -fl 'swift-frontend|swift-driver|swift-build|swift-testing|SourceKitService|sourcekit-lsp' || echo "(none)"
-          for pattern in swift-frontend swift-driver swift-build swift-package swift-test swift-testing swiftpm-testing-helper xctest SourceKitService sourcekit-lsp; do
-            pkill -9 -f "$pattern" 2>/dev/null || true
-          done
-          exit 0
+  ci:
+    uses: Aemi-Studio/aemi/.github/workflows/swift-tool.yml@ci/shared-tool-workflow
+    permissions:
+      contents: write
+    with:
+      tool: dolly
+      macos-package-extra: |
+        set -euo pipefail
+        BIN="$(swift build -c release --show-bin-path)/dolly"
+        VERSION="$("$BIN" --version)"
+        # Fetch into a subdir, NOT the workspace root: the upload-artifact glob
+        # `dolly-*.tar.gz` would otherwise sweep `dolly-minilm.tar.gz` (the raw
+        # model input) up as a stray release asset.
+        mkdir -p _model
+        gh release download embedding-models-v1 --repo "$GITHUB_REPOSITORY" \
+          --pattern 'dolly-minilm.tar.gz' --pattern 'dolly-minilm.tar.gz.sha256' \
+          --dir _model --clobber
+        EXPECTED="$(cut -d' ' -f1 _model/dolly-minilm.tar.gz.sha256)"
+        ACTUAL="$(shasum -a 256 _model/dolly-minilm.tar.gz | cut -d' ' -f1)"
+        if [ "$EXPECTED" != "$ACTUAL" ]; then
+          echo "::error::MiniLM checksum mismatch (expected $EXPECTED, got $ACTUAL)"
+          exit 1
+        fi
+        NAME="dolly-full-$VERSION-macos-arm64"
+        mkdir -p "$NAME/Models"
+        cp "$BIN" LICENSE README.md "$NAME/"
+        # Same on macOS, where release builds keep their debug map
+        # (measured on v0.7.0: 26 MiB -> 14 MiB). -S drops debug symbols,
+        # -x drops non-global ones; both keep the binary runnable.
+        strip -S -x "$NAME/dolly"
+        tar -xzf _model/dolly-minilm.tar.gz -C "$NAME/Models"   # -> Models/MiniLM/...
+        printf '%s\n' \
+          '# Bundled model' \
+          '' \
+          'This archive bundles all-MiniLM-L6-v2 (Models/MiniLM), a sentence-embedding' \
+          'model by the Sentence-Transformers authors, converted to Core ML.' \
+          '' \
+          'Licensed under the Apache License 2.0.' \
+          'https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2' \
+          '' \
+          'dolly loads it automatically for --semantic when it sits next to the' \
+          'executable. Delete Models/ to fall back to the on-device NLContextual' \
+          'provider, or override with --embedding-bundle / DOLLY_EMBEDDING_BUNDLE.' \
+          > "$NAME/THIRD_PARTY_NOTICES.md"
+        tar -czf "$NAME.tar.gz" "$NAME"
+        shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+        ls -lh "$NAME.tar.gz"
