@@ -23,7 +23,7 @@ let package = Package(
     .executable(name: "dolly", targets: ["dolly"]),
   ],
   dependencies: [
-    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.2"),
+    .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
     // swift-system supplies the one thing FoundationEssentials lacks for a CLI:
     // a safe, Sendable stderr handle. Foundation's FileHandle would re-link
@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "cf75a3a4afd25d25f45cb8af0f23132b8d5ad29c"
+      revision: "1c25dcaa476450867fcd8533723f84f81f79d76b"
     ),
   ],
   targets: [
