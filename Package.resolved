@@ -1,12 +1,12 @@
 {
-  "originHash" : "8084db6937faff6efdd14dc35cb4deebff4cfb9a240d74038f91dd8c348d5072",
+  "originHash" : "70ff3bb4a5b96f0d62c74eb0c2a4810469a3004d941243a2392a91836242bebf",
   "pins" : [
     {
       "identity" : "analyzerkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "cf75a3a4afd25d25f45cb8af0f23132b8d5ad29c"
+        "revision" : "1c25dcaa476450867fcd8533723f84f81f79d76b"
       }
     },
     {
@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
       }
     },
     {
