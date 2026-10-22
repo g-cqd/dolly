@@ -29,12 +29,12 @@ let package = Package(
     // a safe, Sendable stderr handle. Foundation's FileHandle would re-link
     // ~50 MiB of ICU on Linux; the C `fputs` route needs three separate unsafe
     // markers. One small, dependency-free Apple package is the better trade.
-    .package(url: "https://github.com/apple/swift-system.git", from: "1.7.1"),
+    .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
     // The project model the analyzers share: previews, test code, generated
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "1c25dcaa476450867fcd8533723f84f81f79d76b"
+      revision: "727e8ca12c0c3c0bd71d1369a3c6a71724362f75"
     ),
   ],
   targets: [
