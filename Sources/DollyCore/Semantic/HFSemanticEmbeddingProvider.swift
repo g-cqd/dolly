@@ -18,6 +18,7 @@
 //  the `embedTokens` per-token path is deferred with the MaxSim reranker.
 
 #if canImport(CoreML)
+  import WordPiece
   import CoreML
   import Foundation
 

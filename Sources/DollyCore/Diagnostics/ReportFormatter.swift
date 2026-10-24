@@ -1,4 +1,5 @@
 import ProjectModel
+import ReportSupport
 import SourceCorpus
 
 #if canImport(FoundationEssentials)
@@ -113,7 +114,7 @@ public enum ReportFormatter {
     /// The absolute URI of ``ArtifactURI/baseID``, which relative uris
     /// resolve against (nil without a root — optionals are omitted).
     let originalUriBaseIds: [String: SarifArtifactLocation]?
-    /// The unit every region's columns count in; see ``UTF16Columns``.
+    /// The unit every region's columns count in; see ``SarifColumns``.
     let columnKind = "utf16CodeUnits"
     let results: [SarifResult]
   }
@@ -219,7 +220,7 @@ public enum ReportFormatter {
   /// - Parameter root: the canonical directory the report's relative paths
   ///   hang from, or nil when every path is absolute.
   private static func sarif(_ report: AnalysisReport, root: String?) -> String {
-    var columns = UTF16Columns(root: root)
+    var columns = SarifColumns(root: root, byteOrderMark: .parsed, readCap: Analyzer.sourceByteCap)
     /// Where a finding or a related location points, its column in UTF-16.
     func physicalLocation(path: String, line: Int, column: Int) -> SarifPhysicalLocation {
       SarifPhysicalLocation(
