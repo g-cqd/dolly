@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import ProjectModel
 import Testing
 
 /// `--include`/`--exclude`: a clone group found only in preview or generated

@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import ProjectModel
 import Testing
 
 /// Duplication weighs by where it lives: generated files are left out,
