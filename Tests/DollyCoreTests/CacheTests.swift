@@ -6,6 +6,7 @@
 //  and entries for absent files are pruned.
 
 import Foundation
+import SourceCorpus
 import Testing
 
 @testable import DollyCore
