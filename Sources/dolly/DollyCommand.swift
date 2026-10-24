@@ -1,6 +1,7 @@
 public import ArgumentParser
 import DollyCore
 import ProjectModel
+import SourceCorpus
 import SystemPackage
 
 #if canImport(FoundationEssentials)
@@ -418,7 +419,7 @@ struct Analyze: AsyncParsableCommand {
       }
       if type == .typeDirectory {
         files.formUnion(
-          SourceDiscovery.swiftFiles(in: path, isExcluded: configuration.isExcluded(path:)))
+          SourceDiscovery.swiftFiles(under: path, isExcluded: configuration.isExcluded(path:)))
       } else {
         files.insert(URL(fileURLWithPath: path).path)
       }

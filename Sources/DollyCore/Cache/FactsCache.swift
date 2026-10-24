@@ -1,3 +1,5 @@
+import SourceCorpus
+
 //  FactsCache.swift
 //  dolly — fail-open, build- and configuration-gated facts cache
 //
