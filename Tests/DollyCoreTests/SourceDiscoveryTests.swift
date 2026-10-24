@@ -1,4 +1,5 @@
 import Foundation
+import SourceCorpus
 import Testing
 
 @testable import DollyCore
@@ -43,7 +44,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: scratch) }
     try link("Sources/Loop", to: "..", in: root)
 
-    #expect(SourceDiscovery.swiftFiles(in: root.path) == realFiles(under: root))
+    #expect(SourceDiscovery.swiftFiles(under: root.path) == realFiles(under: root))
   }
 
   @Test("Two links back to an ancestor finish and list each file once")
@@ -53,7 +54,7 @@ import Testing
     try link("Sources/Loop1", to: "..", in: root)
     try link("Sources/Loop2", to: "..", in: root)
 
-    #expect(SourceDiscovery.swiftFiles(in: root.path) == realFiles(under: root))
+    #expect(SourceDiscovery.swiftFiles(under: root.path) == realFiles(under: root))
   }
 
   @Test(
@@ -68,7 +69,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: scratch) }
     try link(name, to: destination, in: root)
 
-    #expect(SourceDiscovery.swiftFiles(in: root.path) == realFiles(under: root))
+    #expect(SourceDiscovery.swiftFiles(under: root.path) == realFiles(under: root))
   }
 
   @Test("A link inside the root is followed, and its files are listed once")
@@ -77,7 +78,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: scratch) }
     try link("Alias", to: "Sources", in: root)
 
-    let files = SourceDiscovery.swiftFiles(in: root.path)
+    let files = SourceDiscovery.swiftFiles(under: root.path)
     #expect(files.count == 2)
     #expect(
       Set(SourcePath.canonicalized(files))
@@ -92,7 +93,7 @@ import Testing
     try link("Linked", to: "root", in: scratch)
     let linked = scratch.appending(path: "Linked")
 
-    #expect(SourceDiscovery.swiftFiles(in: linked.path) == realFiles(under: linked))
+    #expect(SourceDiscovery.swiftFiles(under: linked.path) == realFiles(under: linked))
   }
 
   @Test(
@@ -105,7 +106,7 @@ import Testing
     let walked = rootThroughLink ? scratch.appending(path: "Linked") : root
 
     #expect(
-      SourceDiscovery.swiftFiles(in: walked.path)
+      SourceDiscovery.swiftFiles(under: walked.path)
         == realFiles(under: walked) + [walked.path + "/Sources/Broken.swift"])
   }
 
@@ -119,7 +120,7 @@ import Testing
     try write("Sources/Sub/C.swift", in: root)
     try link("Vendor", to: "Sources/Sub", in: root)
 
-    let files = SourceDiscovery.swiftFiles(in: root.path) { $0.contains("/Vendor/") }
+    let files = SourceDiscovery.swiftFiles(under: root.path) { $0.contains("/Vendor/") }
     #expect(files == realFiles(under: root) + [root.path + "/Sources/Sub/C.swift"])
   }
 
@@ -132,7 +133,7 @@ import Testing
     }
     try write("Sources/Notes.md", in: root)
 
-    let files = SourceDiscovery.swiftFiles(in: root.path) { $0.contains("/Generated/") }
+    let files = SourceDiscovery.swiftFiles(under: root.path) { $0.contains("/Generated/") }
     #expect(files == realFiles(under: root))
   }
 }
