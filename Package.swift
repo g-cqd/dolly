@@ -33,9 +33,9 @@ let package = Package(
     // The project model the analyzers share: previews, test code, generated
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
-      url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "6f2ac674dfde1e5e37ecba22009a25336eb92280"
-    ),
+            url: "https://github.com/g-cqd/analyzerkit.git",
+            revision: "a9c1e991dfa077077b41c7071e0051fba6431f92"
+        ),
   ],
   targets: [
     .target(
@@ -45,6 +45,8 @@ let package = Package(
         .product(name: "SwiftParser", package: "swift-syntax"),
         .product(name: "ProjectModel", package: "analyzerkit"),
         .product(name: "SourceCorpus", package: "analyzerkit"),
+        .product(name: "ReportSupport", package: "analyzerkit"),
+        .product(name: "WordPiece", package: "analyzerkit"),
       ],
       swiftSettings: strictSwiftSettings
     ),
@@ -60,7 +62,10 @@ let package = Package(
     ),
     .testTarget(
       name: "DollyCoreTests",
-      dependencies: ["DollyCore", .product(name: "SourceCorpus", package: "analyzerkit")],
+      dependencies: [
+        "DollyCore", .product(name: "SourceCorpus", package: "analyzerkit"),
+        .product(name: "WordPiece", package: "analyzerkit"),
+      ],
       resources: [.copy("Fixtures")],
       swiftSettings: strictSwiftSettings
     ),

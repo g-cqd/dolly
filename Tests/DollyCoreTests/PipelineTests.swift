@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import ProjectModel
 import Testing
 
 @Suite struct PipelineTests {
