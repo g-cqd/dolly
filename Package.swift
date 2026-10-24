@@ -33,9 +33,9 @@ let package = Package(
     // The project model the analyzers share: previews, test code, generated
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
-            url: "https://github.com/g-cqd/analyzerkit.git",
-            revision: "a9c1e991dfa077077b41c7071e0051fba6431f92"
-        ),
+      url: "https://github.com/g-cqd/analyzerkit.git",
+      revision: "a9c1e991dfa077077b41c7071e0051fba6431f92"
+    ),
   ],
   targets: [
     .target(
