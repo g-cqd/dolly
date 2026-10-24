@@ -1,12 +1,28 @@
 {
-  "originHash" : "459c96d9ad1d47206287a1a5111ea0b65ad2382868a347d5dc325e8edd35ea16",
+  "originHash" : "4abd8971b4a49ccb55ea07175edd12fa33027cecf38bb87f3bae0dcca850a4fb",
   "pins" : [
+    {
+      "identity" : "aemi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Aemi-Studio/aemi.git",
+      "state" : {
+        "revision" : "afc1be3d578045b381e76f6b1712a81b39956ced"
+      }
+    },
+    {
+      "identity" : "aemijson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiJSON.git",
+      "state" : {
+        "revision" : "6bca1d8fade0236506726869fb626c4882fc2aea"
+      }
+    },
     {
       "identity" : "analyzerkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "727e8ca12c0c3c0bd71d1369a3c6a71724362f75"
+        "revision" : "6f2ac674dfde1e5e37ecba22009a25336eb92280"
       }
     },
     {
@@ -16,6 +32,15 @@
       "state" : {
         "revision" : "6a52f3251125d74daf04fcbd5e6f08a75d074382",
         "version" : "1.8.2"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "844289ac455816e193f1dbbe014f3c4dbe429410",
+        "version" : "1.7.4"
       }
     },
     {
