@@ -1,0 +1,330 @@
+{
+  "analyzedFileCount" : 21,
+  "cacheHits" : 0,
+  "cacheMisses" : 0,
+  "degradedFiles" : [
+    {
+      "detail" : "not valid UTF-8",
+      "path" : "Goldens\/Corpus\/Bad.swift"
+    }
+  ],
+  "findings" : [
+    {
+      "column" : 1,
+      "fingerprint" : "672bf868cfd07577",
+      "line" : 7,
+      "message" : "2 duplicated regions of ~81 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:5",
+      "path" : "Fixtures\/Clean\/PeriodicFunctionBody.swift",
+      "related" : [
+        {
+          "column" : 5,
+          "line" : 5,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 17,
+      "fingerprint" : "91aff5d0232ac913",
+      "line" : 8,
+      "message" : "5 duplicated regions of ~57 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:6, Fixtures\/Corpus\/StructuralPair\/A.swift:14, Fixtures\/Corpus\/StructuralPair\/A.swift:22, Fixtures\/Corpus\/StructuralPair\/A.swift:30",
+      "path" : "Fixtures\/Clean\/PeriodicFunctionBody.swift",
+      "related" : [
+        {
+          "column" : 21,
+          "line" : 6,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 31,
+          "line" : 14,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 22,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 32,
+          "line" : 30,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "9982de023d8c01a6",
+      "line" : 5,
+      "message" : "2 duplicated regions of ~103 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Corpus\/CrossFileSuppressed\/A.swift:5",
+      "path" : "Fixtures\/Corpus\/CrossFileExact\/A.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 5,
+          "path" : "Fixtures\/Corpus\/CrossFileSuppressed\/A.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "3b1127a8592454b7",
+      "line" : 5,
+      "message" : "2 duplicated regions of ~103 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Corpus\/CrossFileSuppressed\/B.swift:5",
+      "path" : "Fixtures\/Corpus\/CrossFileExact\/B.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 5,
+          "path" : "Fixtures\/Corpus\/CrossFileSuppressed\/B.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 26,
+      "fingerprint" : "e07b1f158365bb80",
+      "line" : 7,
+      "message" : "16 duplicated regions of ~50 tokens (similarity 0.86)",
+      "note" : "duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:10, Fixtures\/Corpus\/StructuralPair\/A.swift:13, Fixtures\/Corpus\/StructuralPair\/A.swift:17, Fixtures\/Corpus\/StructuralPair\/A.swift:26, Fixtures\/Corpus\/StructuralPair\/A.swift:29, Fixtures\/Corpus\/StructuralPair\/A.swift:32, Fixtures\/Corpus\/StructuralPair\/A.swift:35, Fixtures\/Corpus\/StructuralPair\/B.swift:7, Fixtures\/Corpus\/StructuralPair\/B.swift:10, Fixtures\/Corpus\/StructuralPair\/B.swift:13, Fixtures\/Corpus\/StructuralPair\/B.swift:17, Fixtures\/Corpus\/StructuralPair\/B.swift:26, Fixtures\/Corpus\/StructuralPair\/B.swift:29, Fixtures\/Corpus\/StructuralPair\/B.swift:32, Fixtures\/Corpus\/StructuralPair\/B.swift:35",
+      "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+      "related" : [
+        {
+          "column" : 28,
+          "line" : 10,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 31,
+          "line" : 13,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 17,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 26,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 29,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 32,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 35,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift"
+        },
+        {
+          "column" : 24,
+          "line" : 7,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 26,
+          "line" : 10,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 29,
+          "line" : 13,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 9,
+          "line" : 17,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 22,
+          "line" : 26,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 23,
+          "line" : 29,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 25,
+          "line" : 32,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        },
+        {
+          "column" : 27,
+          "line" : 35,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 15,
+      "fingerprint" : "8de7a3034cef343e",
+      "line" : 20,
+      "message" : "2 duplicated regions of ~50 tokens (similarity 0.80)",
+      "note" : "duplicates: Fixtures\/Corpus\/StructuralPair\/B.swift:20",
+      "path" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+      "related" : [
+        {
+          "column" : 13,
+          "line" : 20,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        }
+      ],
+      "rule" : "structural-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 19,
+      "fingerprint" : "4c742eb012d16e64",
+      "line" : 6,
+      "message" : "2 duplicated regions of ~97 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Corpus\/StructuralPair\/B.swift:24",
+      "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+      "related" : [
+        {
+          "column" : 30,
+          "line" : 24,
+          "path" : "Fixtures\/Corpus\/StructuralPair\/B.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 23,
+      "fingerprint" : "2e69f8fa2475244b",
+      "line" : 11,
+      "message" : "2 duplicated regions of ~88 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Findings\/ExactClones.swift:26",
+      "path" : "Fixtures\/Findings\/ExactClones.swift",
+      "related" : [
+        {
+          "column" : 25,
+          "line" : 26,
+          "path" : "Fixtures\/Findings\/ExactClones.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "585a5b756a4473e2",
+      "line" : 5,
+      "message" : "2 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Findings\/NearClones.swift:18",
+      "path" : "Fixtures\/Findings\/NearClones.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 18,
+          "path" : "Fixtures\/Findings\/NearClones.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 57,
+      "fingerprint" : "8e9c6686ce8adfda",
+      "line" : 44,
+      "message" : "3 duplicated regions of ~59 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Findings\/NetworkingDuplication.swift:56, Fixtures\/Findings\/NetworkingDuplication.swift:68",
+      "path" : "Fixtures\/Findings\/NetworkingDuplication.swift",
+      "related" : [
+        {
+          "column" : 60,
+          "line" : 56,
+          "path" : "Fixtures\/Findings\/NetworkingDuplication.swift"
+        },
+        {
+          "column" : 58,
+          "line" : 68,
+          "path" : "Fixtures\/Findings\/NetworkingDuplication.swift"
+        }
+      ],
+      "rule" : "exact-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "5d4b9170f8acf324",
+      "line" : 10,
+      "message" : "3 duplicated regions of ~58 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Findings\/SameFileNearClones.swift:24, Fixtures\/Findings\/SameFileNearClones.swift:38",
+      "path" : "Fixtures\/Findings\/SameFileNearClones.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 24,
+          "path" : "Fixtures\/Findings\/SameFileNearClones.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 38,
+          "path" : "Fixtures\/Findings\/SameFileNearClones.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    },
+    {
+      "column" : 1,
+      "fingerprint" : "39211773bba8461f",
+      "line" : 37,
+      "message" : "4 duplicated regions of ~109 tokens (similarity 1.00)",
+      "note" : "duplicates: Fixtures\/Findings\/ViewModelDuplication.swift:71, Fixtures\/Findings\/ViewModelDuplication.swift:105, Fixtures\/Findings\/ViewModelDuplication.swift:139",
+      "path" : "Fixtures\/Findings\/ViewModelDuplication.swift",
+      "related" : [
+        {
+          "column" : 1,
+          "line" : 71,
+          "path" : "Fixtures\/Findings\/ViewModelDuplication.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 105,
+          "path" : "Fixtures\/Findings\/ViewModelDuplication.swift"
+        },
+        {
+          "column" : 1,
+          "line" : 139,
+          "path" : "Fixtures\/Findings\/ViewModelDuplication.swift"
+        }
+      ],
+      "rule" : "near-clone",
+      "severity" : "warning"
+    }
+  ],
+  "outOfScope" : [
+
+  ],
+  "schemaVersion" : 1,
+  "suppressed" : [
+
+  ],
+  "wasCancelled" : false
+}
