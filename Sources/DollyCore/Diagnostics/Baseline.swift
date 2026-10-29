@@ -1,4 +1,5 @@
 import ProjectModel
+import ReportSupport
 
 #if canImport(FoundationEssentials)
   import FoundationEssentials
@@ -37,27 +38,17 @@ public struct Baseline: Sendable, Equatable {
 
   // MARK: - Persistence (versioned JSON, deterministic ordering)
 
-  private struct Payload: Codable {
-    var version: Int
-    var tool: String
-    var fingerprints: [String]
-  }
-
   public static func load(path: String) throws(DollyError) -> Baseline {
-    let payload = try BoundedFileReader.readJSON(Payload.self, path: path)
-    guard payload.version == 1 else {
-      throw .configurationInvalid(
-        path: path, detail: "unsupported baseline version \(payload.version)")
+    let file = try BoundedFileReader.readJSON(BaselineFile.self, path: path)
+    do {
+      return Baseline(fingerprints: Set(try file.validated(requiringVersion: true).fingerprints))
+    } catch {
+      throw .configurationInvalid(path: path, detail: error.description)
     }
-    return Baseline(fingerprints: Set(payload.fingerprints))
   }
 
   public func write(path: String) throws(DollyError) {
-    let payload = Payload(
-      version: 1,
-      tool: ToolInfo.name,
-      fingerprints: fingerprints.sorted()
-    )
+    let payload = BaselineFile(tool: ToolInfo.name, fingerprints: fingerprints, versioned: true)
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     do {
