@@ -1,3 +1,4 @@
+import AnalyzerCLI
 public import ArgumentParser
 import DollyCore
 import ProjectModel
@@ -196,7 +197,7 @@ struct Analyze: AsyncParsableCommand {
     if report.wasCancelled {
       writeStandardError(
         "dolly: run cancelled before the corpus was complete; no findings reported\n")
-      throw ExitCode(ExitStatus.internalFailure)
+      throw ExitCode(ExitStatus.internalFailure.rawValue)
     }
 
     // A corpus where EVERY file degraded analyzed nothing; exiting 0 would be
@@ -217,7 +218,7 @@ struct Analyze: AsyncParsableCommand {
       writeStandardError(
         "dolly: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
       )
-      throw ExitCode(ExitStatus.internalFailure)
+      throw ExitCode(ExitStatus.internalFailure.rawValue)
     }
 
     // Before anything reads a path: baselines, SARIF and the formatted output
@@ -238,7 +239,7 @@ struct Analyze: AsyncParsableCommand {
     if let writeBaseline {
       // Guarded in validate(): a baseline is whole-corpus debt by definition,
       // so it can never be written from a scoped run.
-      try baselineOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
+      try outputOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
       writeStandardError(
         "\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n")
       return
@@ -265,10 +266,9 @@ struct Analyze: AsyncParsableCommand {
     writeStandardError(summary + "\n")
 
     // Notes inform; they never fail a run, not even a strict one.
-    let failed =
-      strict ? report.findings.contains { $0.severity > .note } : report.maxSeverity == .error
+    let failed = RunOutcome.fails(report.findings.map(\.severity), strict: strict)
     if failed {
-      throw ExitCode(1)
+      throw ExitCode(ExitStatus.findings.rawValue)
     }
   }
 
@@ -356,23 +356,28 @@ struct Analyze: AsyncParsableCommand {
   /// internal failure, `78` a bad configuration or baseline. `70` prints the
   /// report when every file was skipped, and nothing when the run was
   /// cancelled, so a caller tells the two apart by whether stdout is empty.
-  enum ExitStatus {
-    static let findings: Int32 = 1
-    static let internalFailure: Int32 = 70
-    static let badConfiguration: Int32 = 78
-  }
 
   /// A malformed config is a broken gate, not a finding — exit 78 so CI can
   /// tell the two apart instead of reporting a typo as analysis output.
 
   /// A missing or corrupt baseline is a broken gate, not a finding — exit 78
   /// so CI cannot mistake it for "findings found" (exit 1).
+  /// An output the run was asked to write and could not is exit 74, not a configuration error (ADR-0018).
+  private func outputOrExit<T>(_ body: () throws -> T) throws -> T {
+    do {
+      return try body()
+    } catch {
+      writeStandardError("dolly: \(error)\n")
+      throw ExitCode(ExitStatus.outputFailure.rawValue)
+    }
+  }
+
   private func baselineOrExit<T>(_ body: () throws -> T) throws -> T {
     do {
       return try body()
     } catch {
       writeStandardError("dolly: \(error)\n")
-      throw ExitCode(ExitStatus.badConfiguration)
+      throw ExitCode(ExitStatus.badConfiguration.rawValue)
     }
   }
 
@@ -383,7 +388,7 @@ struct Analyze: AsyncParsableCommand {
       throw error
     } catch {
       writeStandardError("dolly: \(error)\n")
-      throw ExitCode(ExitStatus.badConfiguration)
+      throw ExitCode(ExitStatus.badConfiguration.rawValue)
     }
   }
 
