@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "840261837272f50311c056c67af9f1579a4965d9"
+      revision: "801daebd3ff54146848de12b6241079f429232f6"
     ),
   ],
   targets: [
@@ -55,6 +55,7 @@ let package = Package(
       name: "dolly",
       dependencies: [
         "DollyCore",
+        .product(name: "AnalyzerCLI", package: "analyzerkit"),
         .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "SystemPackage", package: "swift-system"),
