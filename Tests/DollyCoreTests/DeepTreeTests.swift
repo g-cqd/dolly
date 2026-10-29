@@ -2,7 +2,8 @@ import DollyCore
 import Foundation
 import Testing
 
-/// A deeply nested file never crashes the run: files nested within reason are analysed on the large stack, clones
+/// A deeply nested file never crashes the run: files nested within reason (1,000 links already overflow the
+/// cooperative pool's stack) are analysed on the large stack, clones
 /// between them included, and one nested past the limit is listed as skipped (analyzerkit roadmap 0041).
 @Suite struct DeepTreeTests {
   private static func chain(_ name: String, _ links: Int) -> String {
@@ -19,7 +20,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: root) }
     var paths: [String] = []
     let files = [
-      ("Deep", Self.chain("f", 3_000)), ("DeepCopy", Self.chain("g", 3_000)),
+      ("Deep", Self.chain("f", 1_000)), ("DeepCopy", Self.chain("g", 1_000)),
       ("Deeper", Self.chain("h", 15_000)),
     ]
     for (name, text) in files {
@@ -28,9 +29,11 @@ import Testing
       paths.append(url.path)
     }
     let report = await Analyzer().analyze(files: paths)
-    let cloned = Set(report.findings.map { ($0.path as NSString).lastPathComponent })
+    // One clone group, reported once at one copy with the other as its duplicate.
+    let cloned = report.findings.map { ($0.path as NSString).lastPathComponent }
     #expect(
-      cloned == ["Deep.swift", "DeepCopy.swift"], "the two deep copies are reported as clones")
+      cloned.count == 1 && ["Deep.swift", "DeepCopy.swift"].contains(cloned.first ?? ""),
+      "\(cloned)")
     #expect(
       report.degradedFiles.map { ($0.path as NSString).lastPathComponent } == ["Deeper.swift"])
     #expect(report.degradedFiles.first?.detail.contains("nested") == true)

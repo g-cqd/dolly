@@ -99,7 +99,13 @@ public struct Analyzer: Sendable {
       }
 
       guard let cache else {
-        return .prepared(Self.prepare(source: source, path: path), entry: nil, cached: false)
+        guard let facts = await Self.extractOnLargeStack(source: source, path: path) else {
+          return .degraded(Self.tooDeep(path))
+        }
+        return .prepared(
+          PreparedFile(
+            tokens: facts.0, table: SuppressionTable(directives: facts.1), context: facts.2),
+          entry: nil, cached: false)
       }
       // Cache hit: fingerprint matches and the payload reconstructs
       // cleanly — parse and extraction are skipped. Anything else is a
@@ -113,7 +119,10 @@ public struct Analyzer: Sendable {
           context: entry.context)
         return .prepared(prepared, entry: entry, cached: true)
       }
-      let (tokens, directives, context) = Self.extractFacts(source: source, path: path)
+      guard
+        let (tokens, directives, context) = await Self.extractOnLargeStack(
+          source: source, path: path)
+      else { return .degraded(Self.tooDeep(path)) }
       let prepared = PreparedFile(
         tokens: tokens, table: SuppressionTable(directives: directives), context: context)
       let entry = FactsCache.Entry(
@@ -180,7 +189,15 @@ public struct Analyzer: Sendable {
   public func analyze(source: String, path: String) async -> AnalysisReport {
     var report = AnalysisReport()
     report.analyzedFileCount = 1
-    await runEngine(over: [Self.prepare(source: source, path: path)], into: &report)
+    guard
+      let (tokens, directives, context) = await Self.extractOnLargeStack(source: source, path: path)
+    else {
+      report.degradedFiles = [Self.tooDeep(path)]
+      return report
+    }
+    let prepared = PreparedFile(
+      tokens: tokens, table: SuppressionTable(directives: directives), context: context)
+    await runEngine(over: [prepared], into: &report)
     report.findings.sort()
     return report
   }
@@ -203,17 +220,26 @@ public struct Analyzer: Sendable {
   /// Parse once; derive directives and the interned tokens from that tree.
   /// Interning stays per-file here so preparation remains parallel-safe;
   /// `runEngine` merges the tables corpus-side.
-  private static func prepare(source: String, path: String) -> PreparedFile {
-    let (tokens, directives, context) = extractFacts(source: source, path: path)
-    return PreparedFile(
-      tokens: tokens, table: SuppressionTable(directives: directives), context: context)
+  /// The skipped-file entry for a tree nested past ``SyntaxDepth/defaultLimit``.
+  private static func tooDeep(_ path: String) -> AnalysisReport.DegradedFile {
+    .init(path: path, detail: "nested deeper than \(SyntaxDepth.defaultLimit) levels; not analysed")
   }
 
-  /// The uncached extraction path: parse, scan directives, intern tokens.
+  /// ``extractFacts(source:path:)`` on a large stack: parsing and every walk of the tree recurse once per level
+  /// (analyzerkit roadmap 0041).
+  private static func extractOnLargeStack(
+    source: String, path: String
+  ) async -> (FileTokens, [SuppressionDirective], FileContext)? {
+    await LargeStack.run { extractFacts(source: source, path: path) }
+  }
+
+  /// The uncached extraction path: parse, scan directives, intern tokens. Nil when the tree nests past
+  /// ``SyntaxDepth/defaultLimit``, which no walk below can take.
   private static func extractFacts(
     source: String, path: String
-  ) -> (FileTokens, [SuppressionDirective], FileContext) {
+  ) -> (FileTokens, [SuppressionDirective], FileContext)? {
     let tree = Parser.parse(source: source)
+    if SyntaxDepth.exceeds(tree) { return nil }
     let converter = SourceLocationConverter(fileName: path, tree: tree)
     let directives = DirectiveScanner.scan(tree: tree, converter: converter)
     let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
