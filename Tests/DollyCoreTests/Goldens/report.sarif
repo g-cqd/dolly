@@ -1,0 +1,897 @@
+{
+  "$schema" : "https:\/\/json.schemastore.org\/sarif-2.1.0.json",
+  "runs" : [
+    {
+      "columnKind" : "utf16CodeUnits",
+      "invocations" : [
+        {
+          "executionSuccessful" : true
+        }
+      ],
+      "originalUriBaseIds" : {
+        "SRCROOT" : {
+          "uri" : "file:\/\/\/SRCROOT\/"
+        }
+      },
+      "results" : [
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/PeriodicFunctionBody.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 7
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~81 tokens (similarity 1.00) — duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:5"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "672bf868cfd07577"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 5,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Clean\/PeriodicFunctionBody.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 17,
+                  "startLine" : 8
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "5 duplicated regions of ~57 tokens (similarity 1.00) — duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:6, Fixtures\/Corpus\/StructuralPair\/A.swift:14, Fixtures\/Corpus\/StructuralPair\/A.swift:22, Fixtures\/Corpus\/StructuralPair\/A.swift:30"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "91aff5d0232ac913"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 21,
+                  "startLine" : 6
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 31,
+                  "startLine" : 14
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 32,
+                  "startLine" : 22
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 32,
+                  "startLine" : 30
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/CrossFileExact\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~103 tokens (similarity 1.00) — duplicates: Fixtures\/Corpus\/CrossFileSuppressed\/A.swift:5"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "9982de023d8c01a6"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/CrossFileSuppressed\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "ruleId" : "exact-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/CrossFileExact\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~103 tokens (similarity 1.00) — duplicates: Fixtures\/Corpus\/CrossFileSuppressed\/B.swift:5"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "3b1127a8592454b7"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/CrossFileSuppressed\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "ruleId" : "exact-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 26,
+                  "startLine" : 7
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "16 duplicated regions of ~50 tokens (similarity 0.86) — duplicates: Fixtures\/Corpus\/StructuralPair\/A.swift:10, Fixtures\/Corpus\/StructuralPair\/A.swift:13, Fixtures\/Corpus\/StructuralPair\/A.swift:17, Fixtures\/Corpus\/StructuralPair\/A.swift:26, Fixtures\/Corpus\/StructuralPair\/A.swift:29, Fixtures\/Corpus\/StructuralPair\/A.swift:32, Fixtures\/Corpus\/StructuralPair\/A.swift:35, Fixtures\/Corpus\/StructuralPair\/B.swift:7, Fixtures\/Corpus\/StructuralPair\/B.swift:10, Fixtures\/Corpus\/StructuralPair\/B.swift:13, Fixtures\/Corpus\/StructuralPair\/B.swift:17, Fixtures\/Corpus\/StructuralPair\/B.swift:26, Fixtures\/Corpus\/StructuralPair\/B.swift:29, Fixtures\/Corpus\/StructuralPair\/B.swift:32, Fixtures\/Corpus\/StructuralPair\/B.swift:35"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "e07b1f158365bb80"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 28,
+                  "startLine" : 10
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 31,
+                  "startLine" : 13
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 9,
+                  "startLine" : 17
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 24,
+                  "startLine" : 26
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 25,
+                  "startLine" : 29
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 27,
+                  "startLine" : 32
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 29,
+                  "startLine" : 35
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 24,
+                  "startLine" : 7
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 26,
+                  "startLine" : 10
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 29,
+                  "startLine" : 13
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 9,
+                  "startLine" : 17
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 22,
+                  "startLine" : 26
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 23,
+                  "startLine" : 29
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 25,
+                  "startLine" : 32
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 27,
+                  "startLine" : 35
+                }
+              }
+            }
+          ],
+          "ruleId" : "structural-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/A.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 15,
+                  "startLine" : 20
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~50 tokens (similarity 0.80) — duplicates: Fixtures\/Corpus\/StructuralPair\/B.swift:20"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "8de7a3034cef343e"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 13,
+                  "startLine" : 20
+                }
+              }
+            }
+          ],
+          "ruleId" : "structural-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 19,
+                  "startLine" : 6
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~97 tokens (similarity 1.00) — duplicates: Fixtures\/Corpus\/StructuralPair\/B.swift:24"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "4c742eb012d16e64"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Corpus\/StructuralPair\/B.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 30,
+                  "startLine" : 24
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ExactClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 23,
+                  "startLine" : 11
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~88 tokens (similarity 1.00) — duplicates: Fixtures\/Findings\/ExactClones.swift:26"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "2e69f8fa2475244b"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ExactClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 25,
+                  "startLine" : 26
+                }
+              }
+            }
+          ],
+          "ruleId" : "exact-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/NearClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 5
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "2 duplicated regions of ~59 tokens (similarity 1.00) — duplicates: Fixtures\/Findings\/NearClones.swift:18"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "585a5b756a4473e2"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/NearClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 18
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/NetworkingDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 57,
+                  "startLine" : 44
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "3 duplicated regions of ~59 tokens (similarity 1.00) — duplicates: Fixtures\/Findings\/NetworkingDuplication.swift:56, Fixtures\/Findings\/NetworkingDuplication.swift:68"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "8e9c6686ce8adfda"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/NetworkingDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 60,
+                  "startLine" : 56
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/NetworkingDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 58,
+                  "startLine" : 68
+                }
+              }
+            }
+          ],
+          "ruleId" : "exact-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/SameFileNearClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 10
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "3 duplicated regions of ~58 tokens (similarity 1.00) — duplicates: Fixtures\/Findings\/SameFileNearClones.swift:24, Fixtures\/Findings\/SameFileNearClones.swift:38"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "5d4b9170f8acf324"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/SameFileNearClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 24
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/SameFileNearClones.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 38
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "warning",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ViewModelDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 37
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "4 duplicated regions of ~109 tokens (similarity 1.00) — duplicates: Fixtures\/Findings\/ViewModelDuplication.swift:71, Fixtures\/Findings\/ViewModelDuplication.swift:105, Fixtures\/Findings\/ViewModelDuplication.swift:139"
+          },
+          "partialFingerprints" : {
+            "dolly\/v1" : "39211773bba8461f"
+          },
+          "relatedLocations" : [
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ViewModelDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 71
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ViewModelDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 105
+                }
+              }
+            },
+            {
+              "message" : {
+                "text" : "duplicate region"
+              },
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Fixtures\/Findings\/ViewModelDuplication.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 139
+                }
+              }
+            }
+          ],
+          "ruleId" : "near-clone"
+        },
+        {
+          "level" : "note",
+          "locations" : [
+            {
+              "physicalLocation" : {
+                "artifactLocation" : {
+                  "uri" : "Goldens\/Corpus\/Bad.swift",
+                  "uriBaseId" : "SRCROOT"
+                },
+                "region" : {
+                  "startColumn" : 1,
+                  "startLine" : 1
+                }
+              }
+            }
+          ],
+          "message" : {
+            "text" : "file skipped: not valid UTF-8"
+          },
+          "partialFingerprints" : {
+
+          },
+          "ruleId" : "dolly\/degraded-file"
+        }
+      ],
+      "tool" : {
+        "driver" : {
+          "informationUri" : "https:\/\/github.com\/g-cqd\/dolly",
+          "name" : "dolly",
+          "rules" : [
+            {
+              "help" : {
+                "text" : "Two or more regions contain the same token sequence verbatim. Exact clones drift independently: a fix applied to one copy silently misses the others. Extract the shared code into one function or type; if the duplication is deliberate (generated code, performance specialization), accept it with a directive so the decision is on record."
+              },
+              "id" : "exact-clone",
+              "shortDescription" : {
+                "text" : "identical token sequences (Type-1 clones) duplicated across the corpus"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Two or more regions are identical after normalizing identifiers and literals — the same logic under different names. Near clones are the classic copy-paste-rename bug source. Extract the shared shape into a generic function or protocol extension, parameterizing what differs."
+              },
+              "id" : "near-clone",
+              "shortDescription" : {
+                "text" : "token sequences identical up to identifiers and literals (Type-2 clones)"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Regions whose token shingles are similar above the configured threshold (default 0.8) without being line-for-line copies. These usually mark a missing abstraction. Review whether the variation is essential; extract the common structure when it is not."
+              },
+              "id" : "structural-clone",
+              "shortDescription" : {
+                "text" : "structurally similar regions above the similarity threshold (Type-3 clones)"
+              }
+            },
+            {
+              "help" : {
+                "text" : "Two or more regions compute the same result through different token shapes — a `for` loop versus `reduce`, iteration versus recursion — so the token, near, and structural detectors, which compare token sequences, miss them. This rule embeds each function\/type snippet with a semantic model and groups regions whose embeddings are close (cosine) and whose identifier vocabularies overlap (Jaccard). It is reported only for groups the token detectors did not already claim. It runs only under `--semantic` and is macOS-only (CoreML \/ NaturalLanguage); on other platforms `--semantic` degrades to structural-only with a note.\n\nThe default provider is Apple's on-device NLContextualEmbedding (zero model download, macOS 14+). That is an English natural-language model, NOT code-trained, so its recall on idiom-level clones is materially lower than a code-embedding model — pass `--embedding-bundle <dir>` with a CodeBERT\/MiniLM-class Core ML + tokenizer bundle for higher recall. Review each group: extract the shared behavior into one implementation when the duplication is real; accept it with a directive when it is not."
+              },
+              "id" : "semantic-clone",
+              "shortDescription" : {
+                "text" : "behaviorally equivalent regions in different idioms (Type-4 clones), by embedding similarity"
+              }
+            }
+          ],
+          "version" : "0.11.0"
+        }
+      }
+    }
+  ],
+  "version" : "2.1.0"
+}
