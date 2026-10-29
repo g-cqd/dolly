@@ -73,7 +73,7 @@ Outside the freeze: flags not listed in this section, `--semantic` and other exp
 | `--relative-to <dir>` | print paths relative to `<dir>`; see [Baselines and fingerprints](#baselines-and-fingerprints) |
 | `--baseline <file>` | filter out findings the baseline records |
 | `--write-baseline <file>` | write the current findings as a baseline, then exit 0 |
-| `--config <file>` | configuration file (default `./.dolly.json`) |
+| `--config <file>` | configuration file (default: see [Configuration](#configuration)) |
 | `--cache-path <file>`, `--no-cache` | facts cache file; or disable the cache |
 | `--strict` | fail on any warning or error; notes never fail |
 | `--include`, `--exclude` | region filters: `preview`, `debug`, `test`, `mock`, `generated`, `script`, `all` |
@@ -86,7 +86,8 @@ Outside the freeze: flags not listed in this section, `--semantic` and other exp
 | `1` | the gate failed on findings, and nothing else |
 | `64` | usage error, including `--write-baseline` with a scope |
 | `70` | nothing analyzed (stdout names the skipped files), or cancelled (stdout empty) |
-| `78` | invalid configuration, or a missing or malformed baseline |
+| `74` | a `--write-baseline` file could not be written |
+| `78` | invalid configuration (including an unknown or repeated key), or a missing or malformed baseline |
 
 ### `--only` scope
 
@@ -256,7 +257,9 @@ the run that produced them.
 
 ## Configuration
 
-`.dolly.json` in the working directory (or `--config`):
+Configuration is read from one directory: the current one if it holds `.swift-analyzers.json` or `.dolly.json`, else the nearest directory holding one, up to the repository root. `.swift-analyzers.json` is shared by arcleak, deadwood, dolly and fcheck: its top level holds `exclude`, `includeRegions`, `excludeRegions`, `defines` and `platforms`, and a `"dolly"` section holds dolly's own keys. The shared top level, the section and `.dolly.json` apply in that order: `exclude` lists add up, objects merge key by key, other values replace. An unknown key, or a key given twice, exits `78` and names the file and the key. `--config FILE` reads that one file instead, in the shared format when it is named `.swift-analyzers.json`.
+
+`.dolly.json`, for example:
 
 ```json
 {
@@ -502,9 +505,10 @@ reporting nothing.
 |---|---|
 | `0` | the gate passed: no error-severity finding, so warnings and notes alone pass; with `--strict`, no warning or error. Also after `--write-baseline` |
 | `1` | the gate failed on findings: an error-severity finding, or with `--strict` any warning or error — and nothing else |
-| `64` | usage error: a bad argument, a path that does not exist, an unreadable `--only-from` file |
+| `64` | usage error: a bad argument, a path that does not exist, no Swift file under the paths, an unreadable `--only-from` file |
 | `70` | nothing was analyzed: every file was skipped, and the report on stdout says which and why; or the run was cancelled, and stdout is empty |
-| `78` | invalid configuration, or a missing or malformed baseline |
+| `74` | a `--write-baseline` file could not be written |
+| `78` | invalid configuration (including an unknown or repeated key), or a missing or malformed baseline |
 
 `1` means findings *only*, so a step that posts a review comment on `1` will
 not fire on a typo in the config file. Every rule defaults to warning (test-
