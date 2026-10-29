@@ -1,5 +1,5 @@
 {
-  "originHash" : "f6f2d1d2d2ca0225be3fa22e50c8bce24b8734763bdc03a77681cfc467dc231f",
+  "originHash" : "09a7208b7f8a0b493dbddb17c7a1bd9c648066e63c7ae028f580a0d0dde1dd64",
   "pins" : [
     {
       "identity" : "aemi",
@@ -30,7 +30,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/analyzerkit.git",
       "state" : {
-        "revision" : "0ecaf4cb660c347dce1b400a8c279087fb1be2af"
+        "revision" : "abc90e511ea5156a59089bbe83a224d6282ecbae"
       }
     },
     {
