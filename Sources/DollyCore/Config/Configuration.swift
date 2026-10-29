@@ -1,4 +1,5 @@
 public import ProjectModel
+public import SourceCorpus
 
 #if canImport(FoundationEssentials)
   import FoundationEssentials
@@ -40,8 +41,13 @@ public struct Configuration: Sendable, Codable, Equatable {
   /// Keyed by `RuleID` raw value. Unknown keys are rejected at load time so
   /// a typo can't silently disable nothing.
   public var rules: [String: RuleSettings]
-  /// Path substrings to exclude (matched against the file path).
+  /// Paths to leave out (ADR-0008, shared by every tool): an entry without `*`, `?` or `[` is a
+  /// substring of the path; one with them is a glob relative to ``root``, `/` anchoring it there
+  /// (`SourceCorpus.PathFilter`).
   public var exclude: [String]
+  /// The directory `exclude` globs are relative to: the configuration file's, set by
+  /// ``load(path:)``. Not part of the file.
+  public var root: String?
   /// Optional duplication-engine tuning block.
   public var duplication: DuplicationSettings?
   /// Regions (comma-separated: `preview,debug,test,mock,generated,script`,
@@ -54,6 +60,10 @@ public struct Configuration: Sendable, Codable, Equatable {
   /// Regions to keep out of scope even if `includeRegions` (or `all`)
   /// names them; wins where the two disagree about the same region.
   public var excludeRegions: String?
+
+  private enum CodingKeys: String, CodingKey {
+    case rules, exclude, duplication, includeRegions, excludeRegions
+  }
 
   /// Decodes a partial configuration.
   ///
@@ -96,7 +106,8 @@ public struct Configuration: Sendable, Codable, Equatable {
   }
 
   public static func load(path: String) throws(DollyError) -> Configuration {
-    let config = try BoundedFileReader.readJSON(Configuration.self, path: path)
+    var config = try BoundedFileReader.readJSON(Configuration.self, path: path)
+    config.root = URL(fileURLWithPath: path).deletingLastPathComponent().path
     if let bogus = config.rules.keys.first(where: { RuleID(rawValue: $0) == nil }) {
       throw .configurationInvalid(path: path, detail: "unknown rule id \"\(bogus)\"")
     }
@@ -126,7 +137,11 @@ public struct Configuration: Sendable, Codable, Equatable {
     rules[rule.rawValue]?.severity ?? rule.defaultSeverity
   }
 
+  /// `exclude` as one filter; build it once for many paths.
+  public var pathFilter: PathFilter { PathFilter(exclude, root: root) }
+
+  /// Whether `exclude` leaves `path` out; a trailing `/` asks about a directory.
   public func isExcluded(path: String) -> Bool {
-    exclude.contains { !$0.isEmpty && path.contains($0) }
+    pathFilter.excludes(path)
   }
 }
