@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "e580b224c5fd933c1cd283718d1a3ef2be37a8ab"
+      revision: "27b767f421ee8d40e1080a808c3aedfabc8ee9f7"
     ),
   ],
   targets: [
@@ -45,6 +45,7 @@ let package = Package(
         .product(name: "SwiftParser", package: "swift-syntax"),
         .product(name: "ProjectModel", package: "analyzerkit"),
         .product(name: "SourceCorpus", package: "analyzerkit"),
+        .product(name: "Suppression", package: "analyzerkit"),
         .product(name: "ReportSupport", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
       ],
