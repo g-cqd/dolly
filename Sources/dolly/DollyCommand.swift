@@ -406,6 +406,7 @@ struct Analyze: AsyncParsableCommand {
   /// on the command line makes baselines unusable across invocation styles.
   private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
     var files: Set<String> = []
+    let exclusion = configuration.pathFilter
     for path in paths {
       guard
         // Resolved first: attributesOfItem does not traverse a final symlink,
@@ -419,7 +420,7 @@ struct Analyze: AsyncParsableCommand {
       }
       if type == .typeDirectory {
         files.formUnion(
-          SourceDiscovery.swiftFiles(under: path, isExcluded: configuration.isExcluded(path:)))
+          SourceDiscovery.swiftFiles(under: path, isExcluded: exclusion.excludes))
       } else {
         files.insert(URL(fileURLWithPath: path).path)
       }
