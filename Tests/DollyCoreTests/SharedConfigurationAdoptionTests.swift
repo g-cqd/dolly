@@ -96,7 +96,7 @@ import Testing
       ".swift-analyzers.json": shared, Self.ownFile: #"{"exclude": ["Three"]}"#,
     ])
     #expect(run.status == 0)
-    #expect(run.reported == 2, "Main and Four remain")
+    #expect(run.reported == 2, "Main and Four remain; got \(String(describing: run.reported))")
   }
 
   @Test func `run from a subdirectory, the project root's configuration is read`() throws {

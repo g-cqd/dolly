@@ -1,4 +1,5 @@
 import AnalyzerCLI
+import AnalyzerConfiguration
 public import ArgumentParser
 import DollyCore
 import ProjectModel
@@ -392,15 +393,13 @@ struct Analyze: AsyncParsableCommand {
     }
   }
 
+  /// `--config`, or the configuration directory's shared and own files (ADR-0020).
   private func loadConfigurationUncaught() throws -> Configuration {
-    if let config {
-      return try Configuration.load(path: config)
-    }
-    let implicit = FileManager.default.currentDirectoryPath + "/.dolly.json"
-    if FileManager.default.fileExists(atPath: implicit) {
-      return try Configuration.load(path: implicit)
-    }
-    return .default
+    // The sources: --verbose prints them once dolly adopts the shared output options (roadmap 0020).
+    try Configuration.resolve(
+      explicit: config, currentDirectory: FileManager.default.currentDirectoryPath,
+      analyzedPaths: paths
+    ).configuration
   }
 
   /// Deterministic discovery: directories are walked by `SourceDiscovery`,
