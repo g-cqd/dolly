@@ -10,6 +10,11 @@ import Testing
   /// The top-level keys of a 1.x report, with every optional field absent.
   private static let topLevelKeys: Set<String> = [
     "schemaVersion",
+    // ADR-0017: added keys every analyzer writes; timings only with --timings.
+    "tool",
+    "version",
+    "runNotes",
+    "skippedFiles",
     "findings",
     "suppressed",
     "outOfScope",
