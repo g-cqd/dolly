@@ -74,9 +74,17 @@ Outside the freeze: flags not listed in this section, `--semantic` and other exp
 | `--baseline <file>` | filter out findings the baseline records |
 | `--write-baseline <file>` | write the current findings as a baseline, then exit 0 |
 | `--config <file>` | configuration file (default: see [Configuration](#configuration)) |
-| `--cache-path <file>`, `--no-cache` | facts cache file; or disable the cache |
+| `--cache-path <dir>`, `--no-cache` | the facts cache's root directory; or disable the cache |
 | `--strict` | fail on any warning or error; notes never fail |
-| `--include`, `--exclude` | region filters: `preview`, `debug`, `test`, `mock`, `generated`, `script`, `all` |
+| `--include-regions`, `--exclude-regions` | region filters: `preview`, `debug`, `test`, `mock`, `generated`, `script`, `all` (`--include`/`--exclude` are deprecated spellings) |
+| `--exclude-path <pattern>` | leave paths out of the corpus (repeatable; a substring, or a glob) |
+| `--rules <list>` | only these rules, comma-separated |
+| `--report-new-since <baseline>` | with `--only`: also report out-of-scope findings the base branch's baseline does not hold |
+| `--verbose`, `--quiet`, `--timings` | say more on stderr, nothing but errors, or the time of each phase |
+| `--define <name>` | accepted for the shared surface; no effect, since dolly compares the tokens of every `#if` clause |
+
+A file's region (test, generated, script) comes from its package or Xcode project first, then its content (a test-framework
+import, a generator's header), then path conventions; a file a project encloses but no target compiles is named in a note.
 
 ### Exit codes (stable)
 
@@ -138,14 +146,11 @@ reject a higher `schemaVersion`.
 
 ### Facts cache and parallel jobs
 
-The default is `~/Library/Caches/dolly/<workspace>/facts.json` on macOS, where
-`<workspace>` hashes the repository root found from the working directory (the
-working directory itself, outside a repository). Writes are atomic and each
-entry is checked against its file's content, so concurrent runs never read torn
-or wrong facts; at worst one run's update is lost. Each run rewrites the file
-with its own files, so parallel CI jobs on one machine should each pass their
-own `--cache-path`, which avoids lost updates and evictions. See
-[Facts cache](#facts-cache).
+The cache is analyzerkit's (its ADR-0011): a root directory, `~/Library/Caches/dolly` on macOS
+(`$XDG_CACHE_HOME/dolly` or `~/.cache/dolly` elsewhere), holding one directory per workspace (the package or project
+around the analyzed paths) of sharded entries keyed by each file's content and gated by the build of the tool. A run
+touches only the shards of its files, writes atomically and keeps the other workspaces' entries, within a size budget.
+The facts depend on no configuration, so changing rules or thresholds reuses them. See [Facts cache](#facts-cache).
 
 ### Baselines and fingerprints
 
@@ -241,9 +246,9 @@ as empty and is rewritten; entries for deleted files are pruned. A cache
 larger than 256 MiB is neither read nor written.
 
 ```sh
-dolly analyze Sources                       # cache at <user caches>/dolly/<workspace>/facts.json
+dolly analyze Sources                       # cache under <user caches>/dolly, per workspace
 dolly analyze --no-cache Sources            # disable for this run
-dolly analyze --cache-path ~/Library/Caches/dolly/ci-facts.json Sources
+dolly analyze --cache-path ~/Library/Caches/dolly-ci Sources
 ```
 
 The default cache lives in the user caches directory, one file per

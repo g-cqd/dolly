@@ -34,6 +34,19 @@ public struct AnalysisReport: Sendable, Codable {
   /// What the project model left out: generated files, clone groups found
   /// only in previews. Nil when nothing was, so default runs omit it.
   public var contextNote: String?
+  /// Why the cache, or part of it, was not used. Not encoded: the JSON report carries it among `runNotes`.
+  public var cacheNote: String?
+  /// Files classified by path conventions although a project encloses them. Not encoded; `runNotes` carries them.
+  public var classificationIssues: [ClassificationIssue] = []
+  /// Seconds per phase, for `--timings`. Not encoded; the envelope carries them when asked.
+  public var timings: [String: Double] = [:]
+
+  /// The report's own keys, as before the shared surface (the envelope adds its own around them).
+  private enum CodingKeys: String, CodingKey {
+    case findings, suppressed, outOfScope, degradedFiles, analyzedFileCount, cacheHits, cacheMisses,
+      wasCancelled
+    case semanticNote, contextNote
+  }
 
   public init(
     findings: [Finding] = [],
