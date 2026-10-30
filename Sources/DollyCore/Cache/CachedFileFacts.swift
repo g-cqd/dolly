@@ -59,6 +59,22 @@ struct CachedFileFacts: Sendable, Codable {
     self.directives = directives
   }
 
+  /// The stored form, as the payload decoder rebuilds it.
+  init(
+    recordData: Data, strings: [String], kindData: Data, boundaries: [Int],
+    hasSourceLocationDirective: Bool,
+    directives: [SuppressionDirective], contentRegion: UInt8, previewSpans: [FileContext.LineSpan]
+  ) {
+    self.recordData = recordData
+    self.strings = strings
+    self.kindData = kindData
+    self.boundaries = boundaries
+    self.hasSourceLocationDirective = hasSourceLocationDirective
+    self.directives = directives
+    self.contentRegion = contentRegion
+    self.previewSpans = previewSpans
+  }
+
   /// Rebuild the extraction facts, re-deriving the lazy text provider
   /// from the just-read source. Nil on any internal inconsistency
   /// (truncated blobs, out-of-range ids) — the caller treats that as a

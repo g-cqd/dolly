@@ -34,8 +34,16 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "45850885365470bc96ace79fa1e8f005cfe62a1e"
+      revision: "0af0310918149a47c95cc3c26660dcc13a57669b"
     ),
+    // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
+    // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
+    .package(
+      url: "https://github.com/g-cqd/AemiProtobuf.git",
+      revision: "47220a9e28255a63af6ef7b2c4757584dfe51e80"),
+    .package(
+      url: "https://github.com/g-cqd/AemiJSON.git",
+      revision: "b59ce29617af52ec8585377d694e64becbe2ce81"),
   ],
   targets: [
     .target(
@@ -50,6 +58,8 @@ let package = Package(
         .product(name: "Suppression", package: "analyzerkit"),
         .product(name: "ReportSupport", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
+        .product(name: "AemiProtobuf", package: "AemiProtobuf"),
+        .product(name: "AemiProtobufCore", package: "AemiProtobuf"),
       ],
       swiftSettings: strictSwiftSettings
     ),
@@ -74,6 +84,8 @@ let package = Package(
         "DollyCore", .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
         .product(name: "CorpusScan", package: "analyzerkit"),
+        .product(name: "AemiProtobuf", package: "AemiProtobuf"),
+        .product(name: "AemiJSON", package: "AemiJSON"),
       ],
       exclude: ["Goldens"],
       resources: [.copy("Fixtures")],
