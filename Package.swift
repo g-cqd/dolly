@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "08f09a3c22db126ba55025b8326aa8c9bdf474c6"
+      revision: "ed8c81588790612763b4e47cc4431e8ac357e205"
     ),
   ],
   targets: [
@@ -44,6 +44,7 @@ let package = Package(
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftParser", package: "swift-syntax"),
         .product(name: "ProjectModel", package: "analyzerkit"),
+        .product(name: "CorpusScan", package: "analyzerkit"),
         .product(name: "AnalyzerConfiguration", package: "analyzerkit"),
         .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "Suppression", package: "analyzerkit"),
@@ -57,6 +58,10 @@ let package = Package(
       dependencies: [
         "DollyCore",
         .product(name: "AnalyzerCLI", package: "analyzerkit"),
+        .product(name: "AnalyzerConfiguration", package: "analyzerkit"),
+        .product(name: "CorpusScan", package: "analyzerkit"),
+        .product(name: "ProjectModel", package: "analyzerkit"),
+        .product(name: "ReportSupport", package: "analyzerkit"),
         .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "SystemPackage", package: "swift-system"),
@@ -68,6 +73,7 @@ let package = Package(
       dependencies: [
         "DollyCore", .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
+        .product(name: "CorpusScan", package: "analyzerkit"),
       ],
       exclude: ["Goldens"],
       resources: [.copy("Fixtures")],

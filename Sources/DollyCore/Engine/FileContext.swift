@@ -31,10 +31,28 @@ struct FileContext: Sendable, Codable, Equatable {
     self.previewSpans = previewSpans
   }
 
-  init(path: String, tree: SourceFileSyntax, converter: SourceLocationConverter) {
-    isGenerated = GeneratedCode.isGenerated(path: path, tree: tree)
-    isTestCode = TestConventions.isTestFile(path: path, tree: tree)
-    previewSpans = CodeRegionScanner.scan(tree, converter: converter)
+  /// The context `classification` gives the file: its project first, then its content (ADR-0024).
+  init(
+    path: String, tree: SourceFileSyntax, converter: SourceLocationConverter,
+    classification: ProjectClassification = .conventionsOnly
+  ) {
+    self.init(
+      region: classification.classify(path, tree: tree).region,
+      previewSpans: Self.previewSpans(tree, converter: converter))
+  }
+
+  /// The context of a file of `region` with `previewSpans`.
+  init(region: CodeRegion, previewSpans: [LineSpan]) {
+    self.init(
+      isGenerated: region.contains(.generated), isTestCode: region.contains(.test),
+      previewSpans: previewSpans)
+  }
+
+  /// `#Preview` bodies and `PreviewProvider` types, as line spans.
+  static func previewSpans(_ tree: SourceFileSyntax, converter: SourceLocationConverter)
+    -> [LineSpan]
+  {
+    CodeRegionScanner.scan(tree, converter: converter)
       .filter { $0.region.contains(.preview) }
       .map { LineSpan(start: $0.startLine, end: $0.endLine) }
   }

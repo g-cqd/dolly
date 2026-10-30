@@ -1,12 +1,13 @@
+public import CorpusScan
 public import ProjectModel
 import SourceCorpus
 import SwiftParser
 import SwiftSyntax
 
 #if canImport(FoundationEssentials)
-  public import FoundationEssentials
+  import FoundationEssentials
 #else
-  public import Foundation
+  import Foundation
 #endif
 
 /// Entry point of the pipeline: reads each file with a bounded reader, scans
@@ -23,8 +24,8 @@ public struct Analyzer: Sendable {
 
   public let configuration: Configuration
 
-  /// Facts-cache location; nil disables caching entirely.
-  public let cacheURL: URL?
+  /// Where the facts cache lives and which workspace it serves (ADR-0011); nil disables caching entirely.
+  public let cache: CacheLocation?
 
   /// Opt-in semantic (Type-4) pass options; nil (the default) means the pass
   /// is off and analysis is byte-identical to the structural-only default.
@@ -45,29 +46,14 @@ public struct Analyzer: Sendable {
 
   public init(
     configuration: Configuration = .default,
-    cacheURL: URL? = nil,
+    cache: CacheLocation? = nil,
     semantic: SemanticOptions? = nil,
     reportScope: ReportScope? = nil
   ) {
     self.configuration = configuration
-    self.cacheURL = cacheURL
+    self.cache = cache
     self.semantic = semantic
     self.reportScope = reportScope
-  }
-
-  /// The platform cache default: `~/Library/Caches/dolly/<workspace>/facts.json`
-  /// on macOS; the XDG cache equivalent on Linux (both via FileManager's
-  /// caches directory), where `<workspace>` keys the current repository.
-  public static func defaultCacheURL() -> URL? {
-    // Namespaced per workspace: one global file meant analyzing repo B evicted
-    // repo A's entries, so alternating projects never hit.
-    FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-      .appending(path: "dolly", directoryHint: .isDirectory)
-      .appending(
-        path: RepositoryRoot.workspaceKey(from: FileManager.default.currentDirectoryPath),
-        directoryHint: .isDirectory
-      )
-      .appending(path: "facts.json")
   }
 
   public func analyze(files: [String]) async -> AnalysisReport {
@@ -75,83 +61,60 @@ public struct Analyzer: Sendable {
     // fingerprint, and the corpus must not contain the same file twice under
     // two spellings (it would clone-match against itself).
     let files = SourcePath.canonicalized(files)
+    let started = ContinuousClock.now
 
     var report = AnalysisReport()
     report.analyzedFileCount = files.count
+    // Regions come from the project first (ADR-0024); the project's part is joined per run to the content's part the
+    // cache keeps, since a manifest can change without the file changing.
+    let classification =
+      ProjectLayout.discover(paths: files).map(ProjectClassification.load) ?? .conventionsOnly
+    report.classificationIssues = classification.issues(for: files)
 
-    let cache = cacheURL.map { FactsCache.load(url: $0, configuration: configuration) }
-
-    let outcomes = await ParallelProcessor.map(
-      files,
-      maxConcurrency: ConcurrencyConfiguration.default.maxConcurrentFiles
-    ) { path -> FileOutcome in
-      let data: Data
-      do {
-        data = try BoundedFileReader.read(path: path, cap: Self.sourceByteCap)
-      } catch {
-        return .degraded(
-          .init(path: path, detail: "read failed or exceeds size cap: \(error)"))
-      }
-      // Swift sources are UTF-8. Repairing invalid bytes would analyze text
-      // that is not in the file, and hide the file from the degraded count.
-      guard let source = String(validating: data, as: UTF8.self) else {
-        return .degraded(.init(path: path, detail: "not valid UTF-8"))
-      }
-
-      guard let cache else {
-        guard let facts = await Self.extractOnLargeStack(source: source, path: path) else {
-          return .degraded(Self.tooDeep(path))
-        }
-        return .prepared(
-          PreparedFile(
-            tokens: facts.0, table: SuppressionTable(directives: facts.1), context: facts.2),
-          entry: nil, cached: false)
-      }
-      // Cache hit: fingerprint matches and the payload reconstructs
-      // cleanly — parse and extraction are skipped. Anything else is a
-      // miss (fail open) and refreshes the entry.
-      let fingerprint = FactsCache.fingerprint(of: data)
-      if let entry = cache.entry(for: path, fingerprint: fingerprint),
-        let tokens = entry.fileTokens(path: path, source: source)
-      {
-        let prepared = PreparedFile(
-          tokens: tokens, table: SuppressionTable(directives: entry.directives),
-          context: entry.context)
-        return .prepared(prepared, entry: entry, cached: true)
-      }
-      guard
-        let (tokens, directives, context) = await Self.extractOnLargeStack(
-          source: source, path: path)
-      else { return .degraded(Self.tooDeep(path)) }
-      let prepared = PreparedFile(
-        tokens: tokens, table: SuppressionTable(directives: directives), context: context)
-      let entry = FactsCache.Entry(
-        fingerprint: fingerprint, tokens: tokens, directives: directives, context: context)
-      return .prepared(prepared, entry: entry, cached: false)
+    let scan: CorpusScan<ExtractedFile>
+    do {
+      scan = try await CorpusScanner.scan(
+        paths: files, cache: cache,
+        identity: CacheIdentity.current(tool: ToolInfo.name, version: ToolInfo.version),
+        width: ConcurrencyConfiguration.default.maxConcurrentFiles, keepingBytes: true
+      ) { path, bytes in Self.extract(bytes: bytes, path: path) }
+    } catch {
+      var cancelled = AnalysisReport()
+      cancelled.wasCancelled = true
+      return cancelled
     }
+    let scanned = ContinuousClock.now
+    if let failure = scan.cacheLoadFailure { report.cacheNote = failure }
 
     var prepared: [PreparedFile] = []
-    var freshCache = FactsCache()
-    for outcome in outcomes {
-      switch outcome {
-      case .prepared(let file, let entry, let cached):
-        prepared.append(file)
-        if cached { report.cacheHits += 1 } else if cache != nil { report.cacheMisses += 1 }
-        if let entry {
-          freshCache.update(path: file.tokens.file, entry: entry)
-        }
-      case .degraded(let degraded):
-        report.degradedFiles.append(degraded)
+    for file in scan.files {
+      if let failure = file.failure {
+        report.degradedFiles.append(
+          .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)"))
+        continue
       }
-    }
-
-    // Persist only when contents changed: fresh extractions happened, or
-    // entries for absent files were pruned (the rebuilt cache only ever
-    // contains this run's files).
-    if !Task.isCancelled, let cacheURL, let cache,
-      report.cacheMisses > 0 || Set(cache.entries.keys) != Set(freshCache.entries.keys)
-    {
-      freshCache.persist(url: cacheURL, configuration: configuration)
+      guard let extracted = file.facts, let bytes = file.bytes else { continue }
+      if let reason = extracted.degraded {
+        report.degradedFiles.append(.init(path: file.path, detail: reason))
+        continue
+      }
+      guard let facts = extracted.facts,
+        let tokens = facts.fileTokens(
+          path: file.path, source: String(decoding: bytes, as: UTF8.self))
+      else {
+        report.degradedFiles.append(.init(path: file.path, detail: "cached facts did not rebuild"))
+        continue
+      }
+      let region = classification.classify(
+        file.path, content: CodeRegion(rawValue: facts.contentRegion)
+      ).region
+      prepared.append(
+        PreparedFile(
+          tokens: tokens, table: SuppressionTable(directives: facts.directives),
+          context: FileContext(region: region, previewSpans: facts.previewSpans)))
+      if cache != nil {
+        if file.cacheHit { report.cacheHits += 1 } else { report.cacheMisses += 1 }
+      }
     }
 
     // Clone detection is whole-corpus by construction: a region is a clone
@@ -167,6 +130,10 @@ public struct Analyzer: Sendable {
 
     await runEngine(over: prepared, into: &report)
     report.findings.sort()
+    report.timings = [
+      "scan": Self.seconds(scanned - started),
+      "detect": Self.seconds(ContinuousClock.now - scanned),
+    ]
 
     // Re-check AFTER the engine: cancellation landing mid-engine truncates
     // frontier expansion, so clone groups come back split or missing — a
@@ -212,9 +179,36 @@ public struct Analyzer: Sendable {
     let context: FileContext
   }
 
-  private enum FileOutcome: Sendable {
-    case prepared(PreparedFile, entry: FactsCache.Entry?, cached: Bool)
-    case degraded(AnalysisReport.DegradedFile)
+  private static func seconds(_ duration: Duration) -> Double {
+    let (seconds, attoseconds) = duration.components
+    return Double(seconds) + Double(attoseconds) / 1e18
+  }
+
+  /// One file's extraction, as the cache stores it: not UTF-8, over the size cap, or nested too deeply is a reason
+  /// instead of facts, so a cached file is never parsed again only to fail again.
+  private static func extract(bytes: [UInt8], path: String) -> ExtractedFile {
+    guard bytes.count <= sourceByteCap else {
+      return ExtractedFile(
+        facts: nil,
+        degraded: "read failed or exceeds size cap: \(bytes.count) bytes, over \(sourceByteCap)")
+    }
+    // Swift sources are UTF-8. Repairing invalid bytes would analyze text
+    // that is not in the file, and hide the file from the degraded count.
+    guard let source = String(validating: bytes, as: UTF8.self) else {
+      return ExtractedFile(facts: nil, degraded: "not valid UTF-8")
+    }
+    let tree = Parser.parse(source: source)
+    if SyntaxDepth.exceeds(tree) {
+      return ExtractedFile(facts: nil, degraded: tooDeep(path).detail)
+    }
+    let converter = SourceLocationConverter(fileName: path, tree: tree)
+    let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
+    return ExtractedFile(
+      facts: CachedFileFacts(
+        tokens: tokens, directives: DirectiveScanner.scan(tree: tree, converter: converter),
+        contentRegion: ProjectClassification.contentRegion(path: path, tree: tree),
+        previewSpans: FileContext.previewSpans(tree, converter: converter)),
+      degraded: nil)
   }
 
   /// Parse once; derive directives and the interned tokens from that tree.
