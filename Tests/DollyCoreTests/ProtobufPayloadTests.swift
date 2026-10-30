@@ -73,8 +73,9 @@ import Testing
     #expect(degraded.degraded == "not valid UTF-8" && degraded.facts == nil)
   }
 
-  /// The budget is set from 0017's measurement: protobuf's packed lanes must
-  /// stay under half of what the JSON path wrote, base64 blobs included.
+  /// The budget is set from 0017's measurement (JSON 11.5 MB, protobuf 3.5 MB
+  /// for these 3,000 files): protobuf's packed lanes must stay under 40% of
+  /// what the JSON path wrote, base64 blobs included.
   @Test func `a 3,000-file corpus stays within its size budget`() throws {
     var json = 0
     var protobuf = 0
@@ -84,6 +85,6 @@ import Testing
       protobuf += try ProtobufEncoder().encodeToBytes(file).count
     }
     print("ProtobufPayloadTests: 3,000 files, JSON \(json) bytes, protobuf \(protobuf) bytes")
-    #expect(protobuf * 2 < json, "JSON \(json) bytes, protobuf \(protobuf)")
+    #expect(protobuf * 5 < json * 2, "JSON \(json) bytes, protobuf \(protobuf)")
   }
 }
