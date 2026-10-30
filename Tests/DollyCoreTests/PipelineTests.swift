@@ -1,3 +1,4 @@
+import CorpusScan
 import DollyCore
 import Foundation
 import ProjectModel
@@ -47,7 +48,8 @@ import Testing
     try Data("let value = 1\n".utf8).write(to: good)
 
     // Cold, then warm: a cached run must not analyze the file either.
-    let analyzer = Analyzer(cacheURL: dir.appending(path: "facts.json"))
+    let analyzer = Analyzer(
+      cache: CacheLocation(root: dir.appending(path: "cache").path, workspace: dir.path))
     for _ in 0..<2 {
       let report = await analyzer.analyze(files: [bad.path, good.path])
       let degraded = report.degradedFiles.map { URL(fileURLWithPath: $0.path).lastPathComponent }

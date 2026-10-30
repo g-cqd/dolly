@@ -1,10 +1,12 @@
 //  CacheTests.swift
 //  dolly
 //
-//  The facts cache is an optimization and must NEVER change results:
-//  hit and miss runs produce identical findings, corruption fails open,
-//  and entries for absent files are pruned.
+//  The facts cache is an optimization and must NEVER change results: hit
+//  and miss runs produce identical findings. The cache itself (shards,
+//  corruption failing open, identity, pruning, the budget) is analyzerkit's
+//  CorpusScanner, tested there (roadmap 0020).
 
+import CorpusScan
 import Foundation
 import SourceCorpus
 import Testing
@@ -12,11 +14,11 @@ import Testing
 @testable import DollyCore
 
 @Suite struct CacheTests {
-  private func makeWorkspace() throws -> (dir: URL, cache: URL, files: [String]) {
+  private func makeWorkspace() throws -> (dir: URL, cache: CacheLocation, files: [String]) {
     let dir = FileManager.default.temporaryDirectory
       .appending(path: "dolly-cache-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    let cache = dir.appending(path: "facts.json")
+    let cache = CacheLocation(root: dir.appending(path: "cache").path, workspace: dir.path)
 
     let clone = """
       func aggregateScores(scores: [Double]) -> Double {
@@ -45,7 +47,7 @@ import Testing
   func hitAndMiss() async throws {
     let (dir, cache, files) = try makeWorkspace()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let analyzer = Analyzer(cacheURL: cache)
+    let analyzer = Analyzer(cache: cache)
 
     let cold = await analyzer.analyze(files: files)
     #expect(cold.cacheHits == 0)
@@ -66,7 +68,7 @@ import Testing
   func fingerprintInvalidation() async throws {
     let (dir, cache, files) = try makeWorkspace()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let analyzer = Analyzer(cacheURL: cache)
+    let analyzer = Analyzer(cache: cache)
     _ = await analyzer.analyze(files: files)
 
     try "func changed() -> Int { 1 }\n".write(
@@ -76,107 +78,25 @@ import Testing
     #expect(rerun.cacheMisses == 1)
   }
 
-  @Test("corrupt cache fails open and is rewritten")
-  func corruptCacheFailsOpen() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    try Data("{ not json ]]".utf8).write(to: cache)
-
-    let analyzer = Analyzer(cacheURL: cache)
-    let report = await analyzer.analyze(files: files)
-    #expect(report.cacheHits == 0)
-    #expect(report.cacheMisses == 2)
-    #expect(!report.findings.isEmpty)
-
-    // The bad cache was replaced by a working one.
-    let warm = await analyzer.analyze(files: files)
-    #expect(warm.cacheHits == 2)
-  }
-
-  @Test("version mismatch discards the whole cache")
-  func versionGate() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    let analyzer = Analyzer(cacheURL: cache)
-    _ = await analyzer.analyze(files: files)
-
-    // Rewrite the checked header with a bogus version.
-    var text = try String(contentsOf: cache, encoding: .utf8)
-    text = text.replacingOccurrences(
-      of: "facts \(ToolInfo.version) ", with: "facts 0.0.0-old ")
-    try text.write(to: cache, atomically: true, encoding: .utf8)
-
-    let report = await analyzer.analyze(files: files)
-    #expect(report.cacheHits == 0)
-    #expect(report.cacheMisses == 2)
-  }
-
-  @Test("a cache written by another build is a miss at the same tool version")
-  func buildIdentityGate() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    let analyzer = Analyzer(cacheURL: cache)
-    _ = await analyzer.analyze(files: files)
-    let snapshot = FactsCache.load(url: cache)
-    #expect(snapshot.entries.count == 2)
-    snapshot.persist(url: cache, build: "another-build")
-
-    let rerun = await analyzer.analyze(files: files)
-    #expect(rerun.cacheHits == 0)
-    #expect(rerun.cacheMisses == 2)
-    #expect((await analyzer.analyze(files: files)).cacheHits == 2)
-  }
-
+  /// Extraction (tokens, directives, content region, previews) depends on no configuration, so a changed
+  /// configuration reuses every file's facts, and its findings are those a run without a cache finds.
   @Test(
-    "a change to rules or configuration invalidates cached facts",
+    "a change of rules or configuration reuses the facts and finds what an uncached run finds",
     arguments: [
       Configuration(rules: [RuleID.structuralClone.rawValue: .init(enabled: false)]),
       Configuration(duplication: .init(minimumTokens: 40)),
       Configuration(exclude: ["never-matches-a-source"]),
     ])
-  func configurationGate(configuration: Configuration) async throws {
+  func configurationReusesFacts(configuration: Configuration) async throws {
     let (dir, cache, files) = try makeWorkspace()
     defer { try? FileManager.default.removeItem(at: dir) }
-    let original = Analyzer(cacheURL: cache)
-    _ = await original.analyze(files: files)
+    _ = await Analyzer(cache: cache).analyze(files: files)
 
-    let changed = Analyzer(configuration: configuration, cacheURL: cache)
-    let rerun = await changed.analyze(files: files)
-    #expect(rerun.cacheHits == 0)
-    #expect(rerun.cacheMisses == 2)
-    #expect((await changed.analyze(files: files)).cacheHits == 2)
-  }
-
-  @Test("a matching cache header with malformed contents is a miss")
-  func malformedMatchingCache() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    let build = try #require(BuildIdentity.current)
-    let header = try #require(FactsCache.header(build: build, configuration: .default))
-    try Data("\(header)\n{ invalid json".utf8).write(to: cache)
-
-    let analyzer = Analyzer(cacheURL: cache)
-    let rerun = await analyzer.analyze(files: files)
-    #expect(rerun.cacheHits == 0)
-    #expect(rerun.cacheMisses == 2)
-    #expect((await analyzer.analyze(files: files)).cacheHits == 2)
-  }
-
-  /// load refuses a cache over its size cap, so persist must not write one:
-  /// past the cap, every run would write a file no run can read.
-  @Test("persist never writes a cache load would refuse")
-  func persistHoldsToTheLoadCap() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    _ = await Analyzer(cacheURL: cache).analyze(files: files)
-    let snapshot = FactsCache.load(url: cache)
-    #expect(snapshot.entries.count == 2)
-
-    // A cap of one byte stands in for a corpus that outgrew the real one.
-    snapshot.persist(url: cache, cap: 1)
-    // Neither the oversized cache nor the one it would have replaced.
-    #expect(!FileManager.default.fileExists(atPath: cache.path))
-    #expect(FactsCache.load(url: cache).entries.isEmpty)
+    let rerun = await Analyzer(configuration: configuration, cache: cache).analyze(files: files)
+    #expect(rerun.cacheHits == 2)
+    let uncached = await Analyzer(configuration: configuration).analyze(files: files)
+    #expect(rerun.findings == uncached.findings)
+    #expect(rerun.suppressed.count == uncached.suppressed.count)
   }
 
   @Test("Replacing an executable changes its cache identity")
@@ -193,29 +113,7 @@ import Testing
     #expect(before != after)
   }
 
-  @Test("entries for absent files are pruned on persist")
-  func pruneAbsentFiles() async throws {
-    let (dir, cache, files) = try makeWorkspace()
-    defer { try? FileManager.default.removeItem(at: dir) }
-    let analyzer = Analyzer(cacheURL: cache)
-    _ = await analyzer.analyze(files: files)
-    #expect(Set(FactsCache.load(url: cache).entries.keys) == Set(files))
-
-    _ = await analyzer.analyze(files: [files[0]])
-    #expect(Set(FactsCache.load(url: cache).entries.keys) == [files[0]])
-  }
-
-  @Test("fingerprint is stable and length-suffixed")
-  func fingerprintStability() {
-    let data = Data([1, 2, 3, 4, 5])
-    let first = FactsCache.fingerprint(of: data)
-    #expect(first == FactsCache.fingerprint(of: data))
-    #expect(first.hasSuffix("-5"))
-    #expect(first != FactsCache.fingerprint(of: Data([1, 2, 3, 4, 6])))
-    #expect(FactsCache.fingerprint(of: Data()) != FactsCache.fingerprint(of: Data([0])))
-  }
-
-  @Test("no cache URL means no cache accounting")
+  @Test("no cache means no cache accounting")
   func disabledCache() async throws {
     let (dir, _, files) = try makeWorkspace()
     defer { try? FileManager.default.removeItem(at: dir) }

@@ -1,8 +1,10 @@
 import AnalyzerCLI
 import AnalyzerConfiguration
 public import ArgumentParser
+import CorpusScan
 import DollyCore
 import ProjectModel
+import ReportSupport
 import SourceCorpus
 import SystemPackage
 
@@ -34,7 +36,16 @@ struct DollyCommand: AsyncParsableCommand {
   )
 }
 
-extension OutputFormat: ExpressibleByArgument {}
+extension OutputFormat {
+  init(_ format: OutputOptions.Format) {
+    switch format {
+    case .xcode: self = .xcode
+    case .json: self = .json
+    case .sarif: self = .sarif
+    }
+  }
+}
+
 extension SemanticPreset: ExpressibleByArgument {}
 
 struct Analyze: AsyncParsableCommand {
@@ -42,63 +53,11 @@ struct Analyze: AsyncParsableCommand {
     abstract: "Analyze Swift files or directories (default: current directory)."
   )
 
-  @Argument(help: "Files or directories to analyze.")
-  var paths: [String] = ["."]
-
-  @Option(name: .long, help: "Output format: xcode, json, or sarif.")
-  var format: OutputFormat = .xcode
-
-  @Flag(name: .long, help: "Exit 1 on any warning or error finding; notes never fail a run.")
-  var strict = false
-
-  @Option(name: .long, help: "Configuration file (default: ./.dolly.json when present).")
-  var config: String?
-
-  @Option(name: .long, help: "Baseline file: findings it contains are filtered out.")
-  var baseline: String?
-
-  @Option(name: .long, help: "Write the current findings as a new baseline, then exit 0.")
-  var writeBaseline: String?
-
-  @Option(
-    name: .long,
-    help: ArgumentHelp(
-      "Report only findings touching this file; repeatable. The whole corpus is still analyzed "
-        + "— duplication is a corpus property, so narrowing the input would fabricate and lose "
-        + "clones alike. A clone group qualifies when any of its members is listed, not just the "
-        + "one it happens to be anchored at. A clone group in scope only through another member "
-        + "is reported at its first in-scope member."))
-  var only: [String] = []
-
-  // ArgumentParser option declarations are a fixed shape (@Option, name:,
-  // help: ArgumentHelp(...), var); two of them in a row are token-identical by
-  // construction, and collapsing them would mean generating the CLI surface
-  // rather than declaring it.
-  // @dl:accept near-clone -- declarative CLI surface, not copied logic
-  @Option(
-    name: .customLong("only-from"),
-    help: ArgumentHelp(
-      "Read --only paths from a file, one per line ('-' reads stdin). For CI: "
-        + "`git diff --name-only ... | dolly analyze . --only-from -`."))
-  var onlyFrom: String?
-
-  @Option(
-    name: .customLong("relative-to"),
-    help: ArgumentHelp(
-      "Report paths relative to this directory. Makes fingerprints (and so baselines) and SARIF "
-        + "uris independent of where the repository is checked out, except the uris of paths "
-        + "that need percent-encoding, which stay absolute file:// URIs; GitHub code scanning "
-        + "also requires repo-relative uris to link findings. SARIF declares the directory as "
-        + "the uriBaseId SRCROOT. Use `--relative-to .` in CI."))
-  var relativeTo: String?
-
-  @Flag(name: .long, help: "Disable the facts cache for this run.")
-  var noCache = false
-
-  @Option(
-    name: .long,
-    help: "Facts cache file (default: dolly/<workspace>/facts.json in the user caches directory).")
-  var cachePath: String?
+  // analyzerkit's shared option groups (ADR-0019), in order; dolly's own options after them.
+  @OptionGroup(title: OptionGroupTitle.input) var input: InputOptions
+  @OptionGroup(title: OptionGroupTitle.output) var output: OutputOptions
+  @OptionGroup(title: OptionGroupTitle.rules) var rules: RuleOptions
+  @OptionGroup(title: OptionGroupTitle.cache) var cache: CacheOptions
 
   @Flag(
     name: .long,
@@ -128,39 +87,38 @@ struct Analyze: AsyncParsableCommand {
         + "clone families. Set 0 to disable the cap."))
   var semanticMaxGroup: Int = 25
 
-  @Option(
-    name: .long,
-    help: ArgumentHelp(
-      "Regions to treat as first-class code: preview,debug,test,mock,generated,script, or all.",
-      discussion:
-        "A clone group found only in preview or generated code is reported like any other, "
-        + "tagged \"region: <name>\" so it can be filtered back out — generated files otherwise "
-        + "never enter the corpus at all. One found only in test code keeps its rule's normal "
-        + "severity instead of becoming a note. debug, mock, and script name no region dolly "
-        + "weighs today, so including them has no effect. The same key, with the same values, "
-        + "in deadwood, arcleak and dolly."
-    )
-  )
-  var include: String?
-
-  @Option(
-    name: .long,
-    help: "Regions to keep out of scope even if --include (or \"all\") names them."
-  )
-  var exclude: String?
-
   func run() async throws {
+    for deprecation in input.deprecations { note(deprecation.message(tool: ToolInfo.name)) }
+    if !input.defines.isEmpty {
+      note("dolly: note: --define has no effect: dolly compares the tokens of every #if clause")
+    }
+    // Read before the analysis, so a bad path fails with 78 without the analysis cost.
+    var newSinceBaseline: Baseline?
+    if let path = output.reportNewSince {
+      newSinceBaseline = try baselineOrExit { try Baseline.load(path: path) }
+    }
     var configuration = try loadConfiguration()
-    if let include {
+    if let include = input.includeRegions {
       configuration.includeRegions = include
     }
-    if let exclude {
+    if let exclude = input.excludeRegions {
       configuration.excludeRegions = exclude
     }
     do {
       _ = try configuration.regionSelection()
     } catch {
       throw ValidationError(error.description)
+    }
+    if let wanted = rules.rules {
+      var settings = configuration.rules
+      for name in wanted where RuleID(rawValue: name) == nil {
+        let known = RuleID.allCases.map(\.rawValue).joined(separator: ", ")
+        throw ValidationError("unknown rule \"\(name)\" — known rules: \(known)")
+      }
+      for rule in RuleID.allCases where !wanted.contains(rule.rawValue) {
+        settings[rule.rawValue, default: Configuration.RuleSettings()].enabled = false
+      }
+      configuration.rules = settings
     }
     let reportScope = try resolveReportScope()
     let files = try discoverSwiftFiles(configuration: configuration)
@@ -170,7 +128,8 @@ struct Analyze: AsyncParsableCommand {
     // and it silently reports nothing. Warn loudly; an *empty* scope stays
     // silent — "no Swift changed" is legitimate. The corpus is canonicalized
     // the way the scope is, so a path spelled through a symlink still matches.
-    if let scope = reportScope, !scope.files.isEmpty,
+    // Skipped under --report-new-since: a change that only deletes a file names it in --only.
+    if output.reportNewSince == nil, let scope = reportScope, !scope.files.isEmpty,
       ReportScope(files: files).files.isDisjoint(with: scope.files)
     {
       writeStandardError(
@@ -178,19 +137,16 @@ struct Analyze: AsyncParsableCommand {
       )
     }
 
-    let cacheURL: URL? =
-      noCache
-      ? nil
-      : cachePath.map { URL(fileURLWithPath: $0) } ?? Analyzer.defaultCacheURL()
     let semanticOptions: SemanticOptions? =
       semantic
       ? SemanticOptions(
         bundlePath: embeddingBundle, preset: embeddingPreset, maxGroupSize: semanticMaxGroup)
       : nil
     var report = await Analyzer(
-      configuration: configuration, cacheURL: cacheURL, semantic: semanticOptions,
-      reportScope: reportScope
+      configuration: configuration, cache: cache.noCache ? nil : cacheLocation(),
+      semantic: semanticOptions, reportScope: reportScope
     ).analyze(files: files)
+    let relativeTo = output.relativeTo
 
     // A cancelled run analysed a partial corpus and therefore reports nothing.
     // That must never read as a clean gate — exit as an internal failure,
@@ -212,9 +168,11 @@ struct Analyze: AsyncParsableCommand {
       if let relativeTo {
         report = report.relativized(to: relativeTo)
       }
-      let output = ReportFormatter.format(report, as: format, relativeTo: relativeTo)
-      if !output.isEmpty {
-        print(output)
+      let text = ReportFormatter.format(
+        report, as: OutputFormat(output.format), relativeTo: relativeTo, verbose: output.verbose,
+        timings: output.timings)
+      if !text.isEmpty {
+        print(text)
       }
       writeStandardError(
         "dolly: every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); nothing was analyzed\n"
@@ -230,32 +188,70 @@ struct Analyze: AsyncParsableCommand {
 
     // Semantic-pass status / graceful-fallback note goes to stderr so stdout
     // stays machine-parseable.
-    if let note = report.semanticNote {
-      writeStandardError(ToolInfo.name + ": " + note + "\n")
+    if let semanticNote = report.semanticNote {
+      note(ToolInfo.name + ": " + semanticNote)
     }
-    if let note = report.contextNote {
-      writeStandardError(ToolInfo.name + ": " + note + "\n")
+    if let contextNote = report.contextNote {
+      note(ToolInfo.name + ": " + contextNote)
+    }
+    if let cacheNote = report.cacheNote {
+      note(ToolInfo.name + ": " + cacheNote)
+    }
+    for issue in report.classificationIssues {
+      note("dolly: note: \(issue.message)")
+      if output.verbose { for path in issue.paths { note("    \(path)") } }
     }
 
-    if let writeBaseline {
+    var promoted: Set<String> = []
+    var baselineMatchesNothing = false
+    if let newSinceBaseline {
+      let known = Set(newSinceBaseline.fingerprints)
+      baselineMatchesNothing = NewSince.matchesNothing(
+        report.findings + report.outOfScope, in: known, fingerprint: \.fingerprint)
+      let promotion = NewSince.promote(
+        inScope: report.findings, outOfScope: report.outOfScope, notIn: known,
+        fingerprint: \.fingerprint)
+      report.findings = promotion.reported.sorted()
+      report.outOfScope = promotion.outOfScope
+      promoted = promotion.promoted
+    }
+
+    if let writeBaseline = output.writeBaseline {
       // Guarded in validate(): a baseline is whole-corpus debt by definition,
       // so it can never be written from a scoped run.
       try outputOrExit { try Baseline(findings: report.findings).write(path: writeBaseline) }
-      writeStandardError(
-        "\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)\n")
+      note("\(ToolInfo.name): wrote baseline with \(report.findings.count) fingerprint(s)")
       return
     }
     var baselinedCount = 0
-    if let baseline {
+    if let baseline = output.baseline {
       let loaded = try baselineOrExit { try Baseline.load(path: baseline) }
       let (kept, baselined) = loaded.filter(report.findings)
       report.findings = kept
       baselinedCount = baselined.count
     }
+    var extraNotes: [RunNote] = []
+    if let path = output.reportNewSince {
+      // Counted after --baseline, so the note states what the report shows.
+      let count = report.findings.count(where: { promoted.contains($0.fingerprint) })
+      for message in NewSince.notes(
+        promoted: count, matchesNothing: baselineMatchesNothing, baseline: path)
+      {
+        extraNotes.append(RunNote(code: "report-new-since", severity: "note", message: message))
+        note(message)
+      }
+    }
 
-    let output = ReportFormatter.format(report, as: format, relativeTo: relativeTo)
-    if !output.isEmpty {
-      print(output)
+    let text = ReportFormatter.format(
+      report, as: OutputFormat(output.format), relativeTo: relativeTo, runNotes: extraNotes,
+      verbose: output.verbose, timings: output.timings)
+    if !text.isEmpty {
+      print(text)
+    }
+    if output.timings {
+      for (phase, seconds) in report.timings.sorted(by: { $0.key < $1.key }) {
+        note("dolly: timing: \(phase) \(Int((seconds * 1000).rounded())) ms")
+      }
     }
     var summary = ReportFormatter.summary(report)
     if baselinedCount > 0 {
@@ -264,25 +260,47 @@ struct Analyze: AsyncParsableCommand {
     if !report.outOfScope.isEmpty {
       summary += "; \(report.outOfScope.count) out of scope"
     }
-    writeStandardError(summary + "\n")
+    note(summary)
 
     // Notes inform; they never fail a run, not even a strict one.
-    let failed = RunOutcome.fails(report.findings.map(\.severity), strict: strict)
+    let failed = RunOutcome.fails(report.findings.map(\.severity), strict: output.strict)
     if failed {
       throw ExitCode(ExitStatus.findings.rawValue)
     }
+  }
+
+  /// A line on stderr, unless `--quiet`.
+  private func note(_ line: String) {
+    if !output.quiet { writeStandardError(line + "\n") }
+  }
+
+  /// The cache's root (`--cache-path`, or the user cache directory) and the workspace the run serves (ADR-0011).
+  private func cacheLocation() -> CacheLocation {
+    let environment = ProcessInfo.processInfo.environment
+    let root =
+      cache.cachePath.map { SourcePath.absolute($0) }
+      ?? CacheLocation.defaultRoot(
+        tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+    let workspace =
+      ProjectLayout.discover(paths: input.paths)?.root
+      ?? SourcePath.absolute(input.paths.first ?? ".")
+    return CacheLocation(root: root, workspace: workspace)
   }
 
   func validate() throws {
     // A baseline records the whole corpus's accepted debt. Writing one from a
     // scoped run would silently accept only the scoped subset and drop
     // everything else from the baseline, so refuse rather than surprise.
-    if writeBaseline != nil, !only.isEmpty || onlyFrom != nil {
+    if output.writeBaseline != nil, !input.only.isEmpty || input.onlyFrom != nil {
       throw ValidationError(
         "--write-baseline records whole-corpus debt and cannot be combined with "
           + "--only/--only-from. Write the baseline unscoped, then scope the runs that use it.")
     }
-    if onlyFrom == "-", paths == ["-"] {
+    // Without a scope every finding is already reported, so there is nothing to promote (ADR-0028).
+    if output.reportNewSince != nil, input.only.isEmpty, input.onlyFrom == nil {
+      throw ValidationError("--report-new-since requires --only or --only-from")
+    }
+    if input.onlyFrom == "-", input.paths == ["-"] {
       throw ValidationError("--only-from - reads stdin, so paths cannot also come from stdin.")
     }
   }
@@ -296,9 +314,9 @@ struct Analyze: AsyncParsableCommand {
   /// distinct: `--only-from` pointed at a change set with no Swift files, so
   /// nothing should be reported.
   private func resolveReportScope() throws -> ReportScope? {
-    guard !only.isEmpty || onlyFrom != nil else { return nil }
-    var entries = only
-    if let onlyFrom {
+    guard !input.only.isEmpty || input.onlyFrom != nil else { return nil }
+    var entries = input.only
+    if let onlyFrom = input.onlyFrom {
       entries.append(contentsOf: try readScopeEntries(from: onlyFrom))
     }
     return ReportScope(files: entries)
@@ -328,13 +346,13 @@ struct Analyze: AsyncParsableCommand {
       }
       text = contents
     }
-    return text.split(separator: "\n")
+    // Every line end: "\r\n" is one Character, so splitting on "\n" alone kept a CRLF file one line (analyzerkit
+    // roadmap 0057, fixed in deadwood and arcleak).
+    return text.split(whereSeparator: \.isNewline)
       // Standard library rather than trimmingCharacters(in:), which is
       // corelibs-only: dolly builds against FoundationEssentials on Linux.
       .map { line -> String in
-        // \r too: a CRLF scope file (Windows-authored diff, autocrlf) would
-        // otherwise match nothing — every finding lands out of scope and the
-        // gate silently passes.
+        // Spaces and tabs at either end; a stray \r too.
         let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
         var entry = String(
           line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
@@ -395,11 +413,13 @@ struct Analyze: AsyncParsableCommand {
 
   /// `--config`, or the configuration directory's shared and own files (ADR-0020).
   private func loadConfigurationUncaught() throws -> Configuration {
-    // The sources: --verbose prints them once dolly adopts the shared output options (roadmap 0020).
-    try Configuration.resolve(
-      explicit: config, currentDirectory: FileManager.default.currentDirectoryPath,
-      analyzedPaths: paths
-    ).configuration
+    let resolved = try Configuration.resolve(
+      explicit: input.config, currentDirectory: FileManager.default.currentDirectoryPath,
+      analyzedPaths: input.paths)
+    if output.verbose {
+      for line in resolved.sources.verboseLines(tool: ToolInfo.name) { note(line) }
+    }
+    return resolved.configuration
   }
 
   /// Deterministic discovery: directories are walked by `SourceDiscovery`,
@@ -410,8 +430,12 @@ struct Analyze: AsyncParsableCommand {
   /// on the command line makes baselines unusable across invocation styles.
   private func discoverSwiftFiles(configuration: Configuration) throws -> [String] {
     var files: Set<String> = []
-    let exclusion = configuration.pathFilter
-    for path in paths {
+    let fromFile = configuration.pathFilter
+    let commandLine = PathFilter(input.excludePaths, root: FileManager.default.currentDirectoryPath)
+    let isExcluded: @Sendable (String) -> Bool = {
+      fromFile.excludes($0) || commandLine.excludes($0)
+    }
+    for path in input.paths {
       guard
         // Resolved first: attributesOfItem does not traverse a final symlink,
         // so a linked Sources/ would classify as a "file", degrade, and
@@ -424,8 +448,8 @@ struct Analyze: AsyncParsableCommand {
       }
       if type == .typeDirectory {
         files.formUnion(
-          SourceDiscovery.swiftFiles(under: path, isExcluded: exclusion.excludes))
-      } else {
+          SourceDiscovery.swiftFiles(under: path, isExcluded: isExcluded))
+      } else if !isExcluded(URL(fileURLWithPath: path).path) {
         files.insert(URL(fileURLWithPath: path).path)
       }
     }

@@ -115,13 +115,15 @@ import Testing
     }
   }
 
-  @Test func `rules chooses rules, and an unknown one is a usage error`() throws {
+  @Test func `rules chooses the rules that run, and an unknown one is a usage error`() throws {
     try Self.workspace(["Sources/A.swift": Self.body("a"), "Sources/B.swift": Self.body("b")]) {
       root in
       let run101 = try Self.run(["analyze", ".", "--no-cache", "--rules", "near-clone"], in: root)
-      #expect(run101.status == 0 && run101.output.isEmpty)
+      // Only near-clone runs: the identical pair is reported as a near clone, never as an exact one.
+      #expect(run101.status == 0 && run101.output.contains("[near-clone]"))
+      #expect(!run101.output.contains("[exact-clone]"))
       let run102 = try Self.run(["analyze", ".", "--no-cache", "--rules", "nope"], in: root)
-      #expect(run102.status==64)
+      #expect(run102.status == 64)
     }
   }
 
@@ -153,8 +155,9 @@ import Testing
       "Sources/A.swift": Self.body("a"), "Sources/B.swift": Self.body("b"),
       "Sources/D.swift": "let d = 1\n",
     ]) { root in
-      let run103 = try Self.run(["analyze", ".", "--no-cache", "--write-baseline", "base.json"], in: root)
-      #expect(run103.status==0)
+      let run103 = try Self.run(
+        ["analyze", ".", "--no-cache", "--write-baseline", "base.json"], in: root)
+      #expect(run103.status == 0)
       try Data(("struct C {}\n\n" + Self.body("c")).utf8).write(
         to: root.appending(path: "Sources/C.swift"))
       let run = try Self.run(
@@ -164,8 +167,9 @@ import Testing
         ], in: root)
       #expect(run.errors.contains("outside --only are new since base.json"))
       #expect(!run.output.isEmpty)
-      let run104 = try Self.run(["analyze", ".", "--no-cache", "--report-new-since", "base.json"], in: root)
-      #expect(run104.status==64)
+      let run104 = try Self.run(
+        ["analyze", ".", "--no-cache", "--report-new-since", "base.json"], in: root)
+      #expect(run104.status == 64)
     }
   }
 
@@ -175,7 +179,8 @@ import Testing
       root in
       let cache = root.appending(path: "cache").path
       _ = try Self.run(["analyze", ".", "--cache-path", cache], in: root)
-      let type = (try? FileManager.default.attributesOfItem(atPath: cache))?[.type] as? FileAttributeType
+      let type =
+        (try? FileManager.default.attributesOfItem(atPath: cache))?[.type] as? FileAttributeType
       #expect(type == .typeDirectory)
       let warm = try Self.run(
         ["analyze", ".", "--cache-path", cache, "--format", "json"], in: root)
