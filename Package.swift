@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "28bbdb3552ff7e6ded2b9d831b90354a42c0ccbd"
+      revision: "d26aac854bd8151205f34c22a23b0b80bc328a3f"
     ),
     // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
     // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
