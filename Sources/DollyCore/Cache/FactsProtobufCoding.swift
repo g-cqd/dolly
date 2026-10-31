@@ -1,3 +1,5 @@
+// swift-format-ignore-file: AlwaysUseLowerCamelCase, NoLeadingUnderscores
+// `__aepbEncode`/`__aepbDecode` are AemiProtobuf's protocol requirements, named by it.
 //  FactsProtobufCoding.swift
 //  dolly — the facts cache's payload on AemiProtobuf's wire (analyzerkit roadmap 0017)
 //

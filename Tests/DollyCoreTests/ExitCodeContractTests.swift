@@ -41,7 +41,8 @@ import Testing
       path: "\(tool)-exit-\(UUID().uuidString)")
     let manager = FileManager.default
     for (directory, bytes) in [
-      ("clean", Data("@main struct Clean {\n    static func main() {}\n}\n".utf8)), ("finding", Data(finding.utf8)),
+      ("clean", Data("@main struct Clean {\n    static func main() {}\n}\n".utf8)),
+      ("finding", Data(finding.utf8)),
       ("invalid", Data([0x6C, 0x65, 0x74, 0x20, 0xFF, 0x0A])),
       ("locked", Data("struct Locked {}\n".utf8)),
     ] {
