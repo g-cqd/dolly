@@ -126,14 +126,15 @@ struct CachedFileFacts: Sendable, Codable {
     )
   }
 
-  private static func appendLittleEndian(_ value: UInt32, to bytes: inout [UInt8]) {
+  /// The record lane's words, little-endian; the protobuf payload rebuilds the same lane (FactsProtobufCoding).
+  static func appendLittleEndian(_ value: UInt32, to bytes: inout [UInt8]) {
     bytes.append(UInt8(truncatingIfNeeded: value))
     bytes.append(UInt8(truncatingIfNeeded: value >> 8))
     bytes.append(UInt8(truncatingIfNeeded: value >> 16))
     bytes.append(UInt8(truncatingIfNeeded: value >> 24))
   }
 
-  private static func littleEndianUInt32(_ bytes: [UInt8], at offset: Int) -> UInt32 {
+  static func littleEndianUInt32(_ bytes: [UInt8], at offset: Int) -> UInt32 {
     UInt32(bytes[offset])
       | UInt32(bytes[offset + 1]) << 8
       | UInt32(bytes[offset + 2]) << 16

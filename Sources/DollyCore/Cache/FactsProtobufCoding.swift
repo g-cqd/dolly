@@ -54,12 +54,12 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
     var previous: Int64 = 0
     for token in 0..<count {
       let base = token * 16
-      let line = Int64(Int32(bitPattern: Self.word(records, base)))
+      let line = Int64(Int32(bitPattern: Self.littleEndianUInt32(records, at: base)))
       lines.append(line - previous)
       previous = line
-      columns.append(Self.word(records, base + 4))
-      raws.append(Self.word(records, base + 8))
-      norms.append(Self.word(records, base + 12))
+      columns.append(Self.littleEndianUInt32(records, at: base + 4))
+      raws.append(Self.littleEndianUInt32(records, at: base + 8))
+      norms.append(Self.littleEndianUInt32(records, at: base + 12))
     }
     writer.appendPackedVarints(field: 1, lines, .zigzag)
     writer.appendPackedVarints(field: 2, columns)
@@ -138,10 +138,10 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
     var line: Int64 = 0
     for token in 0..<lines.count {
       line += lines[token]
-      append(UInt32(bitPattern: Int32(truncatingIfNeeded: line)), to: &records)
-      append(columns[token], to: &records)
-      append(raws[token], to: &records)
-      append(norms[token], to: &records)
+      appendLittleEndian(UInt32(bitPattern: Int32(truncatingIfNeeded: line)), to: &records)
+      appendLittleEndian(columns[token], to: &records)
+      appendLittleEndian(raws[token], to: &records)
+      appendLittleEndian(norms[token], to: &records)
     }
     var boundary = 0
     return Self(
@@ -154,17 +154,6 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
       contentRegion: UInt8(truncatingIfNeeded: contentRegion), previewSpans: spans)
   }
 
-  private static func word(_ bytes: [UInt8], _ offset: Int) -> UInt32 {
-    UInt32(bytes[offset]) | UInt32(bytes[offset + 1]) << 8 | UInt32(bytes[offset + 2]) << 16
-      | UInt32(bytes[offset + 3]) << 24
-  }
-
-  private static func append(_ value: UInt32, to bytes: inout [UInt8]) {
-    bytes.append(UInt8(truncatingIfNeeded: value))
-    bytes.append(UInt8(truncatingIfNeeded: value >> 8))
-    bytes.append(UInt8(truncatingIfNeeded: value >> 16))
-    bytes.append(UInt8(truncatingIfNeeded: value >> 24))
-  }
 }
 
 extension SuppressionDirective: AemiProtoFastEncodable, AemiProtoFastDecodable {
