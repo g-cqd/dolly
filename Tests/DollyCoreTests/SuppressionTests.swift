@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import Suppression
 import Testing
 
 @Suite struct SuppressionTests {

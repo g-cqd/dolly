@@ -1,6 +1,7 @@
 import DollyCore
 import Foundation
 import ProjectModel
+import ReportSupport
 import Testing
 
 /// Report scoping narrows what a run *reports*, never what it analyzes. These
