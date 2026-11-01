@@ -1,247 +1,56 @@
 import ProjectModel
 public import ReportSupport
-import SourceCorpus
 
-#if canImport(FoundationEssentials)
-  import FoundationEssentials
-#else
-  import Foundation
-#endif
+public typealias OutputFormat = ReportOutputFormat
 
-public enum OutputFormat: String, CaseIterable, Sendable {
-  /// `path:line:col: warning|error: [rule] message — note` — parsed by Xcode
-  /// and SwiftPM build logs into inline diagnostics.
-  case xcode
-  /// Stable, versioned JSON of the full report.
-  case json
-  /// SARIF 2.1.0 — GitHub code scanning and other SARIF consumers.
-  case sarif
+/// dolly's reports in the shared formats; the renderers are analyzerkit's `ToolReportFormat`.
+public enum ReportFormatter: ToolReportFormat {
+  public typealias Report = AnalysisReport
+
+  public static let toolName = ToolInfo.name
+  public static let toolVersion = ToolInfo.version
+  public static let informationURI = ToolInfo.informationURI
+  public static let byteOrderMark = SarifColumns.ByteOrderMark.parsed
+  public static let readCap = Analyzer.sourceByteCap
+
+  public static var sarifRules: [Sarif.Rule] {
+    RuleID.allCases.map {
+      Sarif.Rule(
+        id: $0.rawValue,
+        shortDescription: Sarif.Text($0.summary),
+        help: Sarif.Text($0.explanation)
+      )
+    }
+  }
 }
 
-public enum ReportFormatter {
-  /// - Parameter root: the directory `report` was relativized to, if any.
-  ///   SARIF declares it as the base its relative uris resolve against.
-  /// - Parameters:
-  ///   - runNotes: notes the command adds (`--report-new-since`).
-  ///   - verbose: every path of a note, not the first few.
-  ///   - timings: carry the phases' times in the JSON report.
-  public static func format(
-    _ report: AnalysisReport,
-    as format: OutputFormat,
-    relativeTo root: String? = nil,
-    runNotes: [RunNote] = [],
-    verbose: Bool = false,
-    timings: Bool = false
-  ) -> String {
-    switch format {
-    case .xcode: xcode(report)
-    case .json:
-      encodeJSON(
-        envelope(
-          report,
-          root: root.map(SourcePath.canonical),
-          extra: runNotes,
-          verbose: verbose,
-          timings: timings
-        )
-      )
-    case .sarif: sarif(report, root: root.map(SourcePath.canonical))
+extension Finding: ReportedFinding {
+  public var severityName: String { severity.rawValue }
+  public var ruleName: String { rule.rawValue }
+  public var displayMessage: String { note.map { "\(message) — \($0)" } ?? message }
+  // One location per clone-group member beyond the anchor, so a consumer can jump to every duplicate.
+  public var relatedLocations: [ReportedLocation] {
+    related.map {
+      ReportedLocation(path: $0.path, line: $0.line, column: $0.column, message: "duplicate region")
     }
   }
+}
 
-  /// One human summary line (for stderr, so stdout stays machine-parseable).
-  public static func summary(_ report: AnalysisReport) -> String {
-    let errors = report.findings.count(where: { $0.severity == .error })
-    let notes = report.findings.count(where: { $0.severity == .note })
-    let warnings = report.findings.count - errors - notes
-    var line = "\(ToolInfo.name): \(report.findings.count) finding(s) "
-    line += "(\(errors) error(s), \(warnings) warning(s)"
-    line += notes > 0 ? ", \(notes) note(s))" : ")"
-    line += " in \(report.analyzedFileCount) file(s)"
-    line += ReportSummary.notChecked(Set(report.degradedFiles.map(\.path)).count)
-    if !report.suppressed.isEmpty {
-      line += "; \(report.suppressed.count) suppressed"
-    }
-    if !report.degradedFiles.isEmpty {
-      line += "; \(report.degradedFiles.count) file(s) degraded"
-    }
-    return line
-  }
+extension AnalysisReport.DegradedFile: ReportedDegradedFile {
+  public var displayText: String { "file skipped: \(detail)" }
+}
 
-  private static func xcode(_ report: AnalysisReport) -> String {
-    var lines: [String] = []
-    for finding in report.findings {
-      lines.append(
-        XcodeDiagnostic.line(
-          path: finding.path,
-          line: finding.line,
-          column: finding.column,
-          severity: finding.severity.rawValue,
-          rule: finding.rule.rawValue,
-          message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message
-        )
-      )
-    }
-    for degraded in report.degradedFiles {
-      lines.append(
-        XcodeDiagnostic.line(
-          path: degraded.path,
-          line: 1,
-          column: 1,
-          severity: "warning",
-          rule: "dolly",
-          message: "file skipped: \(degraded.detail)"
-        )
-      )
-    }
-    return lines.joined(separator: "\n")
-  }
+extension AnalysisReport: ToolReport {
+  public var suppressedCount: Int { suppressed.count }
 
-  /// The JSON report: the analysis report's fields and the keys every analyzer's report carries (ADR-0017).
-  private static func envelope(
-    _ report: AnalysisReport,
-    root: String? = nil,
-    extra: [RunNote] = [],
-    verbose: Bool = false,
-    timings: Bool = false
-  ) -> ReportEnvelope<AnalysisReport> {
-    var seen: Set<String> = []
-    let skipped = report.degradedFiles.compactMap { file in
-      seen.insert(file.path).inserted ? SkippedFile(path: file.path, reason: .degraded) : nil
-    }
-    func shown(_ path: String) -> String {
-      root.map { RepositoryRoot.relativize(path, to: $0) } ?? path
-    }
+  public var leadingRunNotes: [RunNote] {
     var notes: [RunNote] = []
-    if let note = report.contextNote {
+    if let note = contextNote {
       notes.append(RunNote(code: "context", severity: "note", message: note))
     }
-    if let note = report.cacheNote {
+    if let note = cacheNote {
       notes.append(RunNote(code: "cache", severity: "note", message: note))
     }
-    notes += report.classificationIssues.map { issue in
-      RunNote(
-        code: issue.code,
-        severity: "note",
-        message: issue.message,
-        paths: issue.paths.map(shown),
-        verbose: verbose
-      )
-    }
-    return ReportEnvelope(
-      report,
-      tool: ToolInfo.name,
-      version: ToolInfo.version,
-      runNotes: notes + extra,
-      skippedFiles: skipped,
-      timings: timings ? report.timings : nil
-    )
-  }
-
-  /// Deterministic pretty-printed JSON for report payloads; encoding a
-  /// value the tool built itself cannot reasonably fail, so the fallback
-  /// is an empty object rather than a thrown error.
-  private static func encodeJSON(_ value: some Encodable) -> String {
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    guard let data = try? encoder.encode(value),
-      let text = String(data: data, encoding: .utf8)
-    else {
-      return "{}"
-    }
-    return text
-  }
-
-  // MARK: - SARIF 2.1.0
-
-  /// The SARIF log, on analyzerkit's shared model.
-  /// - Parameter root: the canonical directory the report's relative paths hang from, or nil when every path is absolute.
-  private static func sarif(_ report: AnalysisReport, root: String?) -> String {
-    var columns = SarifColumns(root: root, byteOrderMark: .parsed, readCap: Analyzer.sourceByteCap)
-    /// Where a finding or a related location points, its column in UTF-16.
-    func location(_ path: String, line: Int, column: Int, message: Sarif.Text? = nil)
-      -> Sarif.Location
-    {
-      Sarif.Location(
-        physicalLocation: Sarif.PhysicalLocation(
-          artifactLocation: Sarif.ArtifactLocation(path: path, root: root),
-          region: Sarif.Region(
-            startLine: line,
-            startColumn: columns.column(column, line: line, path: path)
-          )
-        ),
-        message: message
-      )
-    }
-    let results = report.findings.map { finding in
-      Sarif.Result(
-        ruleId: finding.rule.rawValue,
-        level: finding.severity.rawValue,
-        message: Sarif.Text(finding.note.map { "\(finding.message) — \($0)" } ?? finding.message),
-        locations: [location(finding.path, line: finding.line, column: finding.column)],
-        // One location per clone-group member beyond the anchor, so a consumer can jump to every duplicate (omitted
-        // when the finding has no group members).
-        relatedLocations: finding.related.isEmpty
-          ? nil
-          : finding.related.map {
-            location(
-              $0.path,
-              line: $0.line,
-              column: $0.column,
-              message: Sarif.Text("duplicate region")
-            )
-          },
-        partialFingerprints: ["dolly/v1": finding.fingerprint]
-      )
-    }
-    // Degraded files were invisible in SARIF, the format code scanning uploads, so unparseable or unreadable code
-    // looked analyzed. A note-level result per degraded file keeps them where the findings are.
-    let degradedResults = report.degradedFiles.map { file in
-      Sarif.Result(
-        ruleId: "dolly/degraded-file",
-        level: "note",
-        message: Sarif.Text("file skipped: \(file.detail)"),
-        locations: [
-          Sarif.Location(
-            physicalLocation: Sarif.PhysicalLocation(
-              artifactLocation: Sarif.ArtifactLocation(path: file.path, root: root),
-              region: Sarif.Region(startLine: 1, startColumn: 1)
-            )
-          )
-        ],
-        partialFingerprints: [:]
-      )
-    }
-    // A run that analyzed nothing fails: its results are incomplete (SARIF 2.1.0 §3.20.21).
-    let failure: String? =
-      if report.wasCancelled {
-        "the run was cancelled before the corpus was complete; no findings reported"
-      } else if report.everyFileSkipped {
-        "every file in the corpus was skipped (unreadable, non-UTF8, or over the size cap); "
-          + "nothing was analyzed"
-      } else {
-        nil
-      }
-    let driver = Sarif.Driver(
-      name: ToolInfo.name,
-      version: ToolInfo.version,
-      informationUri: ToolInfo.informationURI,
-      rules: RuleID.allCases.map {
-        Sarif.Rule(
-          id: $0.rawValue,
-          shortDescription: Sarif.Text($0.summary),
-          help: Sarif.Text($0.explanation)
-        )
-      }
-    )
-    let log = Sarif.Log(runs: [
-      Sarif.Run(
-        tool: Sarif.Tool(driver: driver),
-        invocations: [Sarif.Invocation(failure: failure)],
-        root: root,
-        results: results + degradedResults
-      )
-    ])
-    return encodeJSON(log)
+    return notes
   }
 }
