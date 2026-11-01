@@ -41,8 +41,12 @@ enum ProjectWeighting {
       } else {
         kept.append(
           CloneGroup(
-            type: group.type, clones: clones, similarity: group.similarity,
-            fingerprint: group.fingerprint))
+            type: group.type,
+            clones: clones,
+            similarity: group.similarity,
+            fingerprint: group.fingerprint
+          )
+        )
       }
     }
     return (kept, dropped)
@@ -51,7 +55,9 @@ enum ProjectWeighting {
   /// The finding as a note when every region it names is test code —
   /// unless `--include test` asks for it checked like any other.
   static func weighted(
-    _ finding: Finding, contexts: [String: FileContext], regionSelection: RegionSelection = .none
+    _ finding: Finding,
+    contexts: [String: FileContext],
+    regionSelection: RegionSelection = .none
   ) -> Finding {
     guard !regionSelection.isIncluded(.test) else { return finding }
     let paths = [finding.path] + finding.related.map(\.path)

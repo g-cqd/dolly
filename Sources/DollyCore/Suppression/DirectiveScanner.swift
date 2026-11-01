@@ -7,6 +7,9 @@ enum DirectiveScanner {
     -> [SuppressionDirective]
   {
     SuppressionDirective.grammar.scan(
-      tree: tree, converter: converter, parse: SuppressionDirective.parse)
+      tree: tree,
+      converter: converter,
+      parse: SuppressionDirective.parse
+    )
   }
 }

@@ -34,7 +34,9 @@ import Testing
     for (relativePath, contents) in files {
       let url = scratch.url.appending(path: relativePath)
       try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       try Data(contents.utf8).write(to: url)
       paths.append(url.path)
     }

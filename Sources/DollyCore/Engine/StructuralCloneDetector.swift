@@ -135,7 +135,9 @@ struct StructuralCloneDetector: Sendable {
 
     // Candidate pairs: SourcererCC prefix + position filtering.
     let generator = PrefixIndexCandidateGenerator(
-      threshold: minimumSimilarity, maxConcurrency: parallelConfig.maxConcurrency)
+      threshold: minimumSimilarity,
+      maxConcurrency: parallelConfig.maxConcurrency
+    )
     let candidates = await generator.candidatePairs(for: allDocuments)
     guard !candidates.isEmpty else { return [] }
 
@@ -165,9 +167,12 @@ struct StructuralCloneDetector: Sendable {
         totalCount: orderedCandidates.count,
         chunkSize: max(
           parallelConfig.minParallelPairs,
-          orderedCandidates.count / (parallelConfig.maxConcurrency * 4)))
+          orderedCandidates.count / (parallelConfig.maxConcurrency * 4)
+        )
+      )
       let verified = await ParallelProcessor.map(
-        chunks, maxConcurrency: parallelConfig.maxConcurrency
+        chunks,
+        maxConcurrency: parallelConfig.maxConcurrency
       ) { chunk in
         orderedCandidates[chunk].compactMap(verify)
       }
@@ -205,7 +210,10 @@ struct StructuralCloneDetector: Sendable {
     // as soon as the threshold is unreachable).
     guard
       let similarity = StructuralVerification.jaccardIfAtLeast(
-        minimumSimilarity, doc1.shingleHashes, doc2.shingleHashes)
+        minimumSimilarity,
+        doc1.shingleHashes,
+        doc2.shingleHashes
+      )
     else { return nil }
 
     // Order-sensitive gate: high bag similarity with scrambled statement
@@ -224,7 +232,8 @@ struct StructuralCloneDetector: Sendable {
   /// The block's normalized id lane, materialized only at verification
   /// time for the few candidates that reach the LCS gate.
   private static func normIDs(
-    of document: ShingledDocument, in sequences: [TokenSequence]
+    of document: ShingledDocument,
+    in sequences: [TokenSequence]
   ) -> [UInt32] {
     guard document.sequenceIndex < sequences.count else { return [] }
     let records = sequences[document.sequenceIndex].records

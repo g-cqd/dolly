@@ -61,7 +61,8 @@
         if probe(candidate) { return candidate }
       }
       throw SemanticEmbeddingError.modelLoadFailed(
-        underlying: LoaderError.noWorkingComputeUnit(compiledURL.lastPathComponent))
+        underlying: LoaderError.noWorkingComputeUnit(compiledURL.lastPathComponent)
+      )
     }
 
     enum LoaderError: Error, CustomStringConvertible {

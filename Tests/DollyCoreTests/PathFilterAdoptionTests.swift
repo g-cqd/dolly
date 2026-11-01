@@ -9,7 +9,8 @@ import Testing
     throws
   {
     let root = FileManager.default.temporaryDirectory.appending(
-      path: "dolly-exclude-\(UUID().uuidString)")
+      path: "dolly-exclude-\(UUID().uuidString)"
+    )
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     let file = root.appending(path: ".dolly.json")

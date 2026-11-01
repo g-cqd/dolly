@@ -327,7 +327,8 @@ enum CloneDetectionUtilities {
   ///   - tokens2: Second token sequence.
   /// - Returns: Jaccard similarity coefficient (0.0 to 1.0).
   static func jaccardSimilarity<Token: Hashable>(
-    _ tokens1: some Sequence<Token>, _ tokens2: some Sequence<Token>
+    _ tokens1: some Sequence<Token>,
+    _ tokens2: some Sequence<Token>
   ) -> Double {
     let set1 = Set(tokens1)
     let set2 = Set(tokens2)

@@ -47,7 +47,11 @@ struct ShingleGeneratorTests {
   func basicShingleGeneration() {
     var interner = TestInterner()
     let shingles = shingles(
-      ["a", "b", "c", "a", "b", "c"], size: 3, normalize: false, interner: &interner)
+      ["a", "b", "c", "a", "b", "c"],
+      size: 3,
+      normalize: false,
+      interner: &interner
+    )
 
     #expect(shingles.count == 4)  // 6 tokens - 3 + 1
     // Identical windows hash equal; distinct windows hash apart.
@@ -72,11 +76,19 @@ struct ShingleGeneratorTests {
     var interner = TestInterner()
     let kinds: [TokenKind] = [.keyword, .identifier, .punctuation, .identifier, .punctuation]
     let shingles1 = shingles(
-      ["func", "foo", "(", "bar", ")"], kinds: kinds, size: 2, normalize: true,
-      interner: &interner)
+      ["func", "foo", "(", "bar", ")"],
+      kinds: kinds,
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
     let shingles2 = shingles(
-      ["func", "baz", "(", "qux", ")"], kinds: kinds, size: 2, normalize: true,
-      interner: &interner)
+      ["func", "baz", "(", "qux", ")"],
+      kinds: kinds,
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
 
     // After normalization, both should produce same shingle hashes
     #expect(Set(shingles1.map(\.hash)) == Set(shingles2.map(\.hash)))
@@ -86,11 +98,19 @@ struct ShingleGeneratorTests {
   func normalizationOfLiterals() {
     var interner = TestInterner()
     let shingles1 = shingles(
-      ["return", "42"], kinds: [.keyword, .literal], size: 2, normalize: true,
-      interner: &interner)
+      ["return", "42"],
+      kinds: [.keyword, .literal],
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
     let shingles2 = shingles(
-      ["return", "100"], kinds: [.keyword, .literal], size: 2, normalize: true,
-      interner: &interner)
+      ["return", "100"],
+      kinds: [.keyword, .literal],
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
 
     #expect(shingles1.count == 1)
     #expect(shingles2.count == 1)
@@ -103,11 +123,19 @@ struct ShingleGeneratorTests {
     // though all identifiers normalize.
     var interner = TestInterner()
     let repeated = shingles(
-      ["foo", "foo"], kinds: [.identifier, .identifier], size: 2, normalize: true,
-      interner: &interner)
+      ["foo", "foo"],
+      kinds: [.identifier, .identifier],
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
     let distinct = shingles(
-      ["foo", "bar"], kinds: [.identifier, .identifier], size: 2, normalize: true,
-      interner: &interner)
+      ["foo", "bar"],
+      kinds: [.identifier, .identifier],
+      size: 2,
+      normalize: true,
+      interner: &interner
+    )
     #expect(repeated[0].hash != distinct[0].hash)
   }
 
@@ -158,7 +186,11 @@ struct ShingleGeneratorTests {
     let generator = ShingleGenerator(shingleSize: 3, normalize: true)
 
     let documents = generator.generateBlockDocuments(
-      from: sequence, sequenceIndex: 0, blockSize: 20, startId: 5)
+      from: sequence,
+      sequenceIndex: 0,
+      blockSize: 20,
+      startId: 5
+    )
 
     // Stride is blockSize/2 = 10: windows at 0, 10, 20 -> 3 documents.
     #expect(documents.count == 3)

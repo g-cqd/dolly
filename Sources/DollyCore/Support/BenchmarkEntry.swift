@@ -31,17 +31,21 @@ import SwiftSyntax
   /// Exact + near suffix-array stage over a prepared corpus (the serial
   /// engine the default configuration runs).
   public static func exactNearGroupCount(
-    _ corpus: BenchmarkTokenCorpus, minimumTokens: Int
+    _ corpus: BenchmarkTokenCorpus,
+    minimumTokens: Int
   ) -> Int {
     let engine = DuplicationEngine(
-      configuration: DuplicationConfiguration(minimumTokens: minimumTokens))
+      configuration: DuplicationConfiguration(minimumTokens: minimumTokens)
+    )
     return engine.detectClones(in: corpus.corpus, types: [.exact, .near]).count
   }
 
   /// Structural stage: block shingling, candidate generation, verification,
   /// and grouping — the same detector `DuplicationDetector` dispatches to.
   public static func structuralGroupCount(
-    _ corpus: BenchmarkTokenCorpus, minimumTokens: Int, minimumSimilarity: Double
+    _ corpus: BenchmarkTokenCorpus,
+    minimumTokens: Int,
+    minimumSimilarity: Double
   ) async -> Int {
     let detector = StructuralCloneDetector(
       minimumTokens: minimumTokens,

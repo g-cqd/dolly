@@ -75,10 +75,17 @@ struct SuffixArrayCloneDetector: Sendable {
   /// stream's position map, with every array as long as the stream stored as
   /// `Index`.
   private func findRepeatGroups<Index: SuffixArrayIndex>(
-    in sequences: [TokenSequence], internCount: Int, lane: Lane, as index: Index.Type
+    in sequences: [TokenSequence],
+    internCount: Int,
+    lane: Lane,
+    as index: Index.Type
   ) -> (groups: [RepeatGroup], refs: [StreamRef]) {
     var (tokens, refs) = buildStream(
-      sequences: sequences, internCount: internCount, lane: lane, as: Index.self)
+      sequences: sequences,
+      internCount: internCount,
+      lane: lane,
+      as: Index.self
+    )
     guard tokens.count >= minimumTokens else { return ([], refs) }
 
     let suffixArray = SuffixArray(borrowing: &tokens)
@@ -111,7 +118,10 @@ struct SuffixArrayCloneDetector: Sendable {
   /// Periodic content inside ONE declaration still self-overlaps and is
   /// still filtered — that protection is intentional and unchanged.
   private func buildStream<Index: SuffixArrayIndex>(
-    sequences: [TokenSequence], internCount: Int, lane: Lane, as index: Index.Type
+    sequences: [TokenSequence],
+    internCount: Int,
+    lane: Lane,
+    as index: Index.Type
   ) -> ([Index], [StreamRef]) {
     var tokens: [Index] = []
     var refs: [StreamRef] = []
@@ -213,7 +223,8 @@ struct SuffixArrayCloneDetector: Sendable {
           clones: clones,
           similarity: 1.0,
           fingerprint: fingerprint
-        ))
+        )
+      )
     }
 
     return cloneGroups.deduplicated()

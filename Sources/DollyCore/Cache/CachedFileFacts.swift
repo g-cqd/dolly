@@ -38,7 +38,9 @@ struct CachedFileFacts: Sendable, Codable {
   let previewSpans: [FileContext.LineSpan]
 
   init(
-    tokens: FileTokens, directives: [SuppressionDirective], contentRegion: CodeRegion,
+    tokens: FileTokens,
+    directives: [SuppressionDirective],
+    contentRegion: CodeRegion,
     previewSpans: [FileContext.LineSpan]
   ) {
     self.contentRegion = contentRegion.rawValue
@@ -61,9 +63,14 @@ struct CachedFileFacts: Sendable, Codable {
 
   /// The stored form, as the payload decoder rebuilds it.
   init(
-    recordData: Data, strings: [String], kindData: Data, boundaries: [Int],
+    recordData: Data,
+    strings: [String],
+    kindData: Data,
+    boundaries: [Int],
     hasSourceLocationDirective: Bool,
-    directives: [SuppressionDirective], contentRegion: UInt8, previewSpans: [FileContext.LineSpan]
+    directives: [SuppressionDirective],
+    contentRegion: UInt8,
+    previewSpans: [FileContext.LineSpan]
   ) {
     self.recordData = recordData
     self.strings = strings
@@ -105,7 +112,8 @@ struct CachedFileFacts: Sendable, Codable {
           normID: normID,
           line: Int32(bitPattern: line),
           column: Int32(bitPattern: column)
-        ))
+        )
+      )
     }
 
     var kindLane = [TokenKind]()

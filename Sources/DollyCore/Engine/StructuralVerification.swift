@@ -17,7 +17,9 @@ enum StructuralVerification {
   /// abort: after `|smaller| - required` misses the pair cannot qualify,
   /// so template-similar false candidates cost a handful of set lookups.
   static func jaccardIfAtLeast(
-    _ threshold: Double, _ first: Set<UInt64>, _ second: Set<UInt64>
+    _ threshold: Double,
+    _ first: Set<UInt64>,
+    _ second: Set<UInt64>
   ) -> Double? {
     guard !first.isEmpty || !second.isEmpty else { return nil }
     let (smaller, larger) = first.count <= second.count ? (first, second) : (second, first)
@@ -25,7 +27,8 @@ enum StructuralVerification {
     // J >= θ requires |∩| >= θ/(1+θ)·(|A|+|B|); epsilon keeps floating
     // error from over-requiring (only ever admits borderline pairs).
     let required = Int(
-      (threshold / (1 + threshold) * Double(first.count + second.count) - 1e-9).rounded(.up))
+      (threshold / (1 + threshold) * Double(first.count + second.count) - 1e-9).rounded(.up)
+    )
     let allowedMisses = smaller.count - required
 
     var intersection = 0

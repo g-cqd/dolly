@@ -141,7 +141,11 @@ struct EmbeddingCloneDiscovery: Sendable {
       let fingerprint = "embedding-" + indices.map(String.init).joined(separator: "-")
       groups.append(
         CloneGroup(
-          type: .semantic, clones: clones, similarity: avgSimilarity, fingerprint: fingerprint)
+          type: .semantic,
+          clones: clones,
+          similarity: avgSimilarity,
+          fingerprint: fingerprint
+        )
       )
     }
     return groups

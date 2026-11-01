@@ -9,14 +9,19 @@ import Testing
 /// pipeline tests in `ReportScopeTests` cover the same rewrite end to end.
 @Suite struct ReanchoringTests {
   private static let threeWay = Finding(
-    rule: .exactClone, severity: .warning, path: "/repo/A.swift", line: 1, column: 1,
+    rule: .exactClone,
+    severity: .warning,
+    path: "/repo/A.swift",
+    line: 1,
+    column: 1,
     message: "duplicate",
     note: "duplicates: /repo/B.swift:4, /repo/C.swift:7, /repo/D.swift:9; region: test",
     related: [
       RelatedLocation(path: "/repo/B.swift", line: 4, column: 1),
       RelatedLocation(path: "/repo/C.swift", line: 7, column: 1),
       RelatedLocation(path: "/repo/D.swift", line: 9, column: 1),
-    ])
+    ]
+  )
 
   @Test("Re-anchoring keeps the other members in order, with the old anchor first")
   func otherMembersKeepTheirOrder() {
@@ -28,9 +33,11 @@ import Testing
         RelatedLocation(path: "/repo/A.swift", line: 1, column: 1),
         RelatedLocation(path: "/repo/B.swift", line: 4, column: 1),
         RelatedLocation(path: "/repo/D.swift", line: 9, column: 1),
-      ])
+      ]
+    )
     #expect(
-      moved.note == "duplicates: /repo/A.swift:1, /repo/B.swift:4, /repo/D.swift:9; region: test")
+      moved.note == "duplicates: /repo/A.swift:1, /repo/B.swift:4, /repo/D.swift:9; region: test"
+    )
   }
 
   @Test("A re-anchored finding keeps the fingerprint of its original anchor")
@@ -43,10 +50,16 @@ import Testing
   /// A two-member group anchored in a subdirectory, with the fingerprint path
   /// spelled relative to the repository root as the analyzer sets it.
   private static let subdirectoryPair = Finding(
-    rule: .exactClone, severity: .warning, path: "/repo/x/A.swift", line: 1, column: 1,
-    message: "m", note: "duplicates: /repo/B/y.swift:4",
+    rule: .exactClone,
+    severity: .warning,
+    path: "/repo/x/A.swift",
+    line: 1,
+    column: 1,
+    message: "m",
+    note: "duplicates: /repo/B/y.swift:4",
     related: [RelatedLocation(path: "/repo/B/y.swift", line: 4, column: 1)],
-    fingerprintPath: "x/A.swift")
+    fingerprintPath: "x/A.swift"
+  )
 
   @Test("A re-anchored finding keeps the unscoped fingerprint under any --relative-to root")
   func subdirectoryRootKeepsUnscopedFingerprint() {
@@ -66,7 +79,8 @@ import Testing
     let moved = Self.subdirectoryPair.reanchored(in: ReportScope(files: ["/repo/B/y.swift"]))
     let json = ReportFormatter.format(AnalysisReport(findings: [moved]), as: .json)
     let object = try #require(
-      JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+      JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+    )
     let finding = try #require((object["findings"] as? [[String: Any]])?.first)
     let anchor = try #require(finding["fingerprintAnchor"] as? [String: Any])
     #expect(Set(anchor.keys) == ["path", "line", "column"])
@@ -81,7 +95,8 @@ import Testing
     let moved = Self.subdirectoryPair.reanchored(in: ReportScope(files: ["/repo/B/y.swift"]))
     let sarif = ReportFormatter.format(AnalysisReport(findings: [moved]), as: .sarif)
     let result = try #require(
-      JSONDecoder().decode(SarifEntries.self, from: Data(sarif.utf8)).runs.first?.results.first)
+      JSONDecoder().decode(SarifEntries.self, from: Data(sarif.utf8)).runs.first?.results.first
+    )
 
     let primary = try #require(result.locations.first?.physicalLocation)
     #expect(primary.artifactLocation.uri == "file:///repo/B/y.swift")
@@ -101,11 +116,21 @@ import Testing
     // The message is hashed into the fingerprint but is not a sort key, so these
     // two differ only in the fingerprint.
     let first = Finding(
-      rule: .exactClone, severity: .warning, path: "/repo/A.swift", line: 1, column: 1,
-      message: "duplicate of one block")
+      rule: .exactClone,
+      severity: .warning,
+      path: "/repo/A.swift",
+      line: 1,
+      column: 1,
+      message: "duplicate of one block"
+    )
     let second = Finding(
-      rule: .exactClone, severity: .warning, path: "/repo/A.swift", line: 1, column: 1,
-      message: "duplicate of another block")
+      rule: .exactClone,
+      severity: .warning,
+      path: "/repo/A.swift",
+      line: 1,
+      column: 1,
+      message: "duplicate of another block"
+    )
     let (lower, higher) =
       first.fingerprint < second.fingerprint ? (first, second) : (second, first)
     #expect(lower.fingerprint != higher.fingerprint)

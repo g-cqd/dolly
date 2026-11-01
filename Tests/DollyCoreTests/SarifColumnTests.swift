@@ -45,7 +45,9 @@ import Testing
     #expect(clone.related.count == 2)
 
     let log = try JSONDecoder().decode(
-      SarifLog.self, from: Data(ReportFormatter.format(report, as: .sarif).utf8))
+      SarifLog.self,
+      from: Data(ReportFormatter.format(report, as: .sarif).utf8)
+    )
     let expected = try Workspace.utf16Column(of: "func", in: Self.cloneLines[0])
     let result = try #require(log.results.first { $0.ruleId == "exact-clone" })
     let columns = (result.locations + (result.relatedLocations ?? []))
@@ -61,7 +63,9 @@ import Testing
     #expect(finding.column > 1)
 
     let log = try JSONDecoder().decode(
-      SarifLog.self, from: Data(ReportFormatter.format(report, as: .sarif).utf8))
+      SarifLog.self,
+      from: Data(ReportFormatter.format(report, as: .sarif).utf8)
+    )
     let result = try #require(log.results.first { $0.ruleId == "exact-clone" })
     #expect(result.locations.first?.physicalLocation.region.startColumn == finding.column)
   }

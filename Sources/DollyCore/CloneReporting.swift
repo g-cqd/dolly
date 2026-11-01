@@ -47,8 +47,10 @@ enum CloneReporting {
   ///     or preview code into the corpus.
   ///   - regionSelection: The parsed `--include`/`--exclude` selection.
   static func findings(
-    from groups: [CloneGroup], configuration: Configuration,
-    contexts: [String: FileContext] = [:], regionSelection: RegionSelection = .none
+    from groups: [CloneGroup],
+    configuration: Configuration,
+    contexts: [String: FileContext] = [:],
+    regionSelection: RegionSelection = .none
   ) -> [Finding] {
     filterByPrecedence(normalize(groups)).map { group in
       let members = group.clones
@@ -93,7 +95,9 @@ enum CloneReporting {
   /// (a group entirely outside an included region needs no tag: nothing
   /// about it depends on `--include`).
   private static func taggedRegion(
-    of members: [Clone], contexts: [String: FileContext], regionSelection: RegionSelection
+    of members: [Clone],
+    contexts: [String: FileContext],
+    regionSelection: RegionSelection
   ) -> CodeRegion {
     var region: CodeRegion = []
     if regionSelection.isIncluded(.generated),

@@ -148,7 +148,8 @@ enum RollingWindows {
             records: records[start..<end],
             lane: lane
           )
-        })
+        }
+      )
     }
 
     return detectGroups(windows: windows, overlapThreshold: windowSize / 2, makeGroup: makeGroup)
@@ -175,7 +176,10 @@ enum RollingWindows {
     guard maxStartIndex >= 1 else { return windows }
     for i in 1...maxStartIndex {
       hash = rollingHash.roll(
-        hash: hash, outgoing: idAt(i - 1), incoming: idAt(i + windowSize - 1))
+        hash: hash,
+        outgoing: idAt(i - 1),
+        incoming: idAt(i + windowSize - 1)
+      )
       windows.append(makeWindow(i, hash))
     }
 
@@ -198,7 +202,9 @@ enum RollingWindows {
     for (hash, bucket) in hashTable where bucket.count >= 2 {
       // Verify actual matches (handle hash collisions)
       let verified = CloneDetectionUtilities.groupMatchingWindows(
-        bucket, overlapThreshold: overlapThreshold)
+        bucket,
+        overlapThreshold: overlapThreshold
+      )
       for group in verified where group.count >= 2 {
         if let cloneGroup = makeGroup(group, hash) {
           cloneGroups.append(cloneGroup)

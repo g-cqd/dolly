@@ -84,16 +84,20 @@ enum SemanticDiscovery {
       #if canImport(CoreML)
         do {
           let provider = try await HFSemanticEmbeddingProvider(
-            bundleDir: URL(fileURLWithPath: bundlePath), maxLength: options.maxLength)
+            bundleDir: URL(fileURLWithPath: bundlePath),
+            maxLength: options.maxLength
+          )
           return .ready(provider)
         } catch {
           return .unavailable(
             note: "semantic: could not load --embedding-bundle at \(bundlePath) "
-              + "(\(error)); running structural only")
+              + "(\(error)); running structural only"
+          )
         }
       #else
         return .unavailable(
-          note: "semantic: --embedding-bundle requires macOS (CoreML); running structural only")
+          note: "semantic: --embedding-bundle requires macOS (CoreML); running structural only"
+        )
       #endif
     }
 
@@ -105,8 +109,9 @@ enum SemanticDiscovery {
     #if canImport(CoreML)
       if let bundledDir = bundledModelDirectory() {
         if let provider = try? await HFSemanticEmbeddingProvider(
-          bundleDir: bundledDir, maxLength: options.maxLength)
-        {
+          bundleDir: bundledDir,
+          maxLength: options.maxLength
+        ) {
           return .ready(provider)
         }
       }
@@ -120,16 +125,19 @@ enum SemanticDiscovery {
         } catch {
           return .unavailable(
             note: "semantic: on-device NLContextualEmbedding unavailable (\(error)); "
-              + "pass --embedding-bundle for a code model; running structural only")
+              + "pass --embedding-bundle for a code model; running structural only"
+          )
         }
       } else {
         return .unavailable(
           note: "semantic: the default provider needs macOS 14+; pass --embedding-bundle; "
-            + "running structural only")
+            + "running structural only"
+        )
       }
     #else
       return .unavailable(
-        note: "semantic mode requires macOS (CoreML/NaturalLanguage); running structural only")
+        note: "semantic mode requires macOS (CoreML/NaturalLanguage); running structural only"
+      )
     #endif
   }
 
@@ -152,7 +160,8 @@ enum SemanticDiscovery {
         .resolvingSymlinksInPath()
       return bundledModelDirectory(
         executableDir: execURL.deletingLastPathComponent(),
-        override: ProcessInfo.processInfo.environment["DOLLY_EMBEDDING_BUNDLE"])
+        override: ProcessInfo.processInfo.environment["DOLLY_EMBEDDING_BUNDLE"]
+      )
     }
 
     /// Pure candidate search for `bundledModelDirectory()` — no process globals,
@@ -179,7 +188,9 @@ enum SemanticDiscovery {
       // FHS / Homebrew-style `bin/dolly` next to `share/dolly/Models/MiniLM`.
       candidates.append(
         executableDir.deletingLastPathComponent().appendingPathComponent(
-          "share/dolly/Models/MiniLM"))
+          "share/dolly/Models/MiniLM"
+        )
+      )
 
       // Resolve each candidate so a symlinked model directory is handed to the
       // provider as its real path — `contentsOfDirectory` (here and in the

@@ -5,7 +5,9 @@ import Testing
 @Suite struct SuppressionTests {
   @Test func parsesAccept() {
     let directive = SuppressionDirective.parse(
-      comment: "// @dl:accept -- reviewed", line: 3)
+      comment: "// @dl:accept -- reviewed",
+      line: 3
+    )
     #expect(directive?.kind == .accept)
     #expect(directive?.reason == "reviewed")
     #expect(directive?.rules.isEmpty == true)
@@ -13,7 +15,9 @@ import Testing
 
   @Test func longNamespaceIsSynonym() {
     let directive = SuppressionDirective.parse(
-      comment: "// @dolly:accept:next exact-clone", line: 1)
+      comment: "// @dolly:accept:next exact-clone",
+      line: 1
+    )
     #expect(directive?.kind == .acceptNext)
     #expect(directive?.rules == [RuleID(rawValue: "exact-clone")!])
   }

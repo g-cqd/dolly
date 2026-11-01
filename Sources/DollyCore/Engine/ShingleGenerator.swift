@@ -116,7 +116,8 @@ struct ShingleGenerator: Sendable {
   /// corpus-uniform `normID` lane, which would conflate all identifiers
   /// and loosen the structural stage's precision.
   func generate(
-    records: ArraySlice<TokenRecord>, kinds: ArraySlice<TokenKind>
+    records: ArraySlice<TokenRecord>,
+    kinds: ArraySlice<TokenKind>
   ) -> [Shingle] {
     guard records.count >= shingleSize else { return [] }
 
@@ -210,7 +211,8 @@ struct ShingleGenerator: Sendable {
           shingleHashes: shingleHashSet(from: shingles),
           shingles: shingles,
           id: currentId,
-        ))
+        )
+      )
 
       currentId += 1
       i += stride

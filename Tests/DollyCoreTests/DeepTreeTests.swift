@@ -15,7 +15,8 @@ import Testing
     async throws
   {
     let root = FileManager.default.temporaryDirectory.appending(
-      path: "dolly-deep-\(UUID().uuidString)")
+      path: "dolly-deep-\(UUID().uuidString)"
+    )
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     var paths: [String] = []
@@ -33,9 +34,11 @@ import Testing
     let cloned = report.findings.map { ($0.path as NSString).lastPathComponent }
     #expect(
       cloned.count == 1 && ["Deep.swift", "DeepCopy.swift"].contains(cloned.first ?? ""),
-      "\(cloned)")
+      "\(cloned)"
+    )
     #expect(
-      report.degradedFiles.map { ($0.path as NSString).lastPathComponent } == ["Deeper.swift"])
+      report.degradedFiles.map { ($0.path as NSString).lastPathComponent } == ["Deeper.swift"]
+    )
     #expect(report.degradedFiles.first?.detail.contains("nested") == true)
   }
 }

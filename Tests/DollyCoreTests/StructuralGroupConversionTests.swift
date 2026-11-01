@@ -5,16 +5,22 @@ import Testing
 
 @Suite("Structural group conversion") struct StructuralGroupConversionTests {
   private static func reference(
-    _ groups: [[Int]], info: [Int: DocumentLocationInfo], pairs: [ClonePairInfo],
+    _ groups: [[Int]],
+    info: [Int: DocumentLocationInfo],
+    pairs: [ClonePairInfo],
     minimumSimilarity: Double
   ) -> [CloneGroup] {
     groups.compactMap { component in
       let clones = component.compactMap { id -> Clone? in
         guard let document = info[id] else { return nil }
         return Clone(
-          file: document.file, startLine: document.startLine,
-          startColumn: document.startColumn, endLine: document.endLine,
-          tokenCount: document.tokenCount, codeSnippet: "")
+          file: document.file,
+          startLine: document.startLine,
+          startColumn: document.startColumn,
+          endLine: document.endLine,
+          tokenCount: document.tokenCount,
+          codeSnippet: ""
+        )
       }
       guard clones.count >= 2 else { return nil }
       let members = pairs.filter {
@@ -25,8 +31,11 @@ import Testing
         ? minimumSimilarity
         : members.reduce(0.0) { $0 + $1.similarity } / Double(members.count)
       return CloneGroup(
-        type: .structural, clones: clones, similarity: similarity,
-        fingerprint: component.sorted().map(String.init).joined(separator: "-"))
+        type: .structural,
+        clones: clones,
+        similarity: similarity,
+        fingerprint: component.sorted().map(String.init).joined(separator: "-")
+      )
     }
   }
 
@@ -41,8 +50,14 @@ import Testing
       groups.append(ids)
       for id in ids {
         let document = ShingledDocument(
-          file: "file-\(id % 5).swift", startLine: id + 1, endLine: id + 4,
-          tokenCount: 50 + id, shingleHashes: [], shingles: [], id: id)
+          file: "file-\(id % 5).swift",
+          startLine: id + 1,
+          endLine: id + 4,
+          tokenCount: 50 + id,
+          shingleHashes: [],
+          shingles: [],
+          id: id
+        )
         documents[id] = document
         if rng.next(5) != 0 { info[id] = DocumentLocationInfo(document: document) }
       }
@@ -59,7 +74,11 @@ import Testing
       let doc2 = try #require(documents[secondID])
       pairs.append(
         ClonePairInfo(
-          doc1: doc1, doc2: doc2, similarity: Double(rng.next(100)) / 100))
+          doc1: doc1,
+          doc2: doc2,
+          similarity: Double(rng.next(100)) / 100
+        )
+      )
     }
 
     let detector = StructuralCloneDetector(minimumSimilarity: 0.5)

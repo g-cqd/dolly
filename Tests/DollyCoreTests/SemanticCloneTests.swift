@@ -82,7 +82,8 @@ private enum SemanticCorpus {
 
     @Test(
       "NLContextual --semantic catches the loop-vs-reduce clone the token engine misses",
-      .enabled(if: SemanticCloneNLTests.nlAssetAvailable))
+      .enabled(if: SemanticCloneNLTests.nlAssetAvailable)
+    )
     func catchesIdiomClone() async throws {
       let files = try SemanticCorpus.loopVsReduceFixtureFiles()
 
@@ -106,7 +107,8 @@ private enum SemanticCorpus {
 
     @Test(
       "NLContextual --semantic adds nothing to clearly unrelated functions",
-      .enabled(if: SemanticCloneNLTests.nlAssetAvailable))
+      .enabled(if: SemanticCloneNLTests.nlAssetAvailable)
+    )
     func addsNothingForDistinctFunctions() async throws {
       let (paths, dir) = try SemanticCorpus.write([
         (
@@ -157,7 +159,9 @@ private enum SemanticCorpus {
     /// A throwaway tree with an optional model dir at each interesting location.
     /// Returns the root; caller removes it.
     private static func stage(
-      adjacentModel: Bool = false, shareModel: Bool = false, overrideModel: Bool = false
+      adjacentModel: Bool = false,
+      shareModel: Bool = false,
+      overrideModel: Bool = false
     ) throws -> (root: URL, execDir: URL, overrideDir: URL) {
       let fm = FileManager.default
       let root = fm.temporaryDirectory.appending(path: "dolly-discovery-\(UUID().uuidString)")
@@ -166,7 +170,9 @@ private enum SemanticCorpus {
       try fm.createDirectory(at: execDir, withIntermediateDirectories: true)
       func plantModel(in dir: URL) throws {
         try fm.createDirectory(
-          at: dir.appending(path: "Model.mlmodelc"), withIntermediateDirectories: true)
+          at: dir.appending(path: "Model.mlmodelc"),
+          withIntermediateDirectories: true
+        )
       }
       if adjacentModel { try plantModel(in: execDir.appending(path: "Models/MiniLM")) }
       if shareModel { try plantModel(in: root.appending(path: "share/dolly/Models/MiniLM")) }
@@ -181,7 +187,8 @@ private enum SemanticCorpus {
       let found = SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: nil)
       #expect(
         found?.resolvingSymlinksInPath().path
-          == execDir.appending(path: "Models/MiniLM").resolvingSymlinksInPath().path)
+          == execDir.appending(path: "Models/MiniLM").resolvingSymlinksInPath().path
+      )
     }
 
     @Test("Falls back to the FHS-style share/dolly layout")
@@ -199,7 +206,9 @@ private enum SemanticCorpus {
       let (root, execDir, overrideDir) = try Self.stage(adjacentModel: true, overrideModel: true)
       defer { try? FileManager.default.removeItem(at: root) }
       let found = SemanticDiscovery.bundledModelDirectory(
-        executableDir: execDir, override: overrideDir.path)
+        executableDir: execDir,
+        override: overrideDir.path
+      )
       #expect(found?.resolvingSymlinksInPath().path == overrideDir.resolvingSymlinksInPath().path)
     }
 
@@ -210,7 +219,8 @@ private enum SemanticCorpus {
       #expect(SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: nil) == nil)
       // An override pointing at a model-free directory is also nil, not a crash.
       #expect(
-        SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: root.path) == nil)
+        SemanticDiscovery.bundledModelDirectory(executableDir: execDir, override: root.path) == nil
+      )
     }
   }
 
@@ -228,14 +238,16 @@ private enum SemanticCorpus {
 
     @Test(
       "HF --embedding-bundle (MiniLM) catches the loop-vs-reduce clone",
-      .enabled(if: SemanticCloneBundleTests.bundleAvailable))
+      .enabled(if: SemanticCloneBundleTests.bundleAvailable)
+    )
     func bundleCatchesIdiomClone() async throws {
       let files = try SemanticCorpus.loopVsReduceFixtureFiles()
       let options = SemanticOptions(bundlePath: Self.miniLMBundle, preset: .balanced)
       let report = await Analyzer(semantic: options).analyze(files: files)
       #expect(
         report.findings.contains { $0.rule == .semanticClone },
-        "MiniLM bundle should surface the semantic clone: \(report.semanticNote ?? "no note")")
+        "MiniLM bundle should surface the semantic clone: \(report.semanticNote ?? "no note")"
+      )
     }
   }
 #endif

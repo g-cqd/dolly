@@ -49,7 +49,8 @@ import Testing
     let report = await Analyzer().analyze(source: source, path: "worker.swift")
     #expect(
       !report.findings.contains { $0.rule == .nearClone },
-      "gap closed? update Fixtures/KnownGaps.md and re-pin this test")
+      "gap closed? update Fixtures/KnownGaps.md and re-pin this test"
+    )
   }
 
   /// Gap 2: structural pairs with dense edits land below the 0.8 Jaccard
@@ -99,7 +100,8 @@ import Testing
     let report = await Analyzer().analyze(files: [a.path, b.path])
     #expect(
       !report.findings.contains { $0.rule == .structuralClone },
-      "gap closed? update Fixtures/KnownGaps.md and re-pin this test")
+      "gap closed? update Fixtures/KnownGaps.md and re-pin this test"
+    )
   }
 
   /// Gap 3: semantic (Type-4) clones — same behavior, different tokens —
@@ -123,7 +125,9 @@ import Testing
       }
       """
     let report = await Analyzer().analyze(
-      source: iterative + "\n" + functional + "\n", path: "semantic.swift")
+      source: iterative + "\n" + functional + "\n",
+      path: "semantic.swift"
+    )
     #expect(report.findings.isEmpty)
   }
 }

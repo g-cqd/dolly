@@ -40,10 +40,12 @@ let package = Package(
     // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
     .package(
       url: "https://github.com/g-cqd/AemiProtobuf.git",
-      revision: "5d6e868179262f0b1a48297808953730e97cd720"),
+      revision: "5d6e868179262f0b1a48297808953730e97cd720"
+    ),
     .package(
       url: "https://github.com/g-cqd/AemiJSON.git",
-      revision: "2bb8507e079f552bfd893d5cdf487aab98e86a78"),
+      revision: "2bb8507e079f552bfd893d5cdf487aab98e86a78"
+    ),
   ],
   targets: [
     .target(

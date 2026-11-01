@@ -107,7 +107,9 @@ enum SAIS {
   }
 
   private static func build<Index: SuffixArrayIndex>(
-    _ text: [Index], alphabetSize: Int, bucketCursor: inout [Int]
+    _ text: [Index],
+    alphabetSize: Int,
+    bucketCursor: inout [Int]
   ) -> [Index] {
     let n = text.count
     guard n > 1 else { return n == 1 ? [0] : [] }
@@ -137,9 +139,15 @@ enum SAIS {
     // full suffixes — the second induction below (LMS in true sorted order)
     // is what yields the final suffix array and must ALWAYS run.
     placeAndInduce(
-      into: &sa, text: text, types: types, lmsPositions: lmsPositions,
-      orderedBy: nil, bucketHeads: bucketHeads, bucketTails: bucketTails,
-      bucketCursor: &bucketCursor)
+      into: &sa,
+      text: text,
+      types: types,
+      lmsPositions: lmsPositions,
+      orderedBy: nil,
+      bucketHeads: bucketHeads,
+      bucketTails: bucketTails,
+      bucketCursor: &bucketCursor
+    )
 
     // Assign names to the sorted LMS substrings, then form the reduced
     // string (one name per LMS position, in text order).
@@ -174,9 +182,15 @@ enum SAIS {
     // sorted order, then L- and S-type suffixes induced around them.
     for index in 0..<n { sa[index] = -1 }
     placeAndInduce(
-      into: &sa, text: text, types: types, lmsPositions: lmsPositions,
-      orderedBy: reducedSA, bucketHeads: bucketHeads, bucketTails: bucketTails,
-      bucketCursor: &bucketCursor)
+      into: &sa,
+      text: text,
+      types: types,
+      lmsPositions: lmsPositions,
+      orderedBy: reducedSA,
+      bucketHeads: bucketHeads,
+      bucketTails: bucketTails,
+      bucketCursor: &bucketCursor
+    )
 
     return sa
   }
@@ -195,8 +209,12 @@ enum SAIS {
   ) {
     for i in bucketTails.indices { bucketCursor[i] = bucketTails[i] }
     placeLMSSuffixes(
-      into: &sa, text: text, lmsPositions: lmsPositions,
-      orderedBy: reducedSA, bucketCursor: &bucketCursor)
+      into: &sa,
+      text: text,
+      lmsPositions: lmsPositions,
+      orderedBy: reducedSA,
+      bucketCursor: &bucketCursor
+    )
     for i in bucketHeads.indices { bucketCursor[i] = bucketHeads[i] }
     inducedSortLType(sa: &sa, text: text, types: types, bucketCursor: &bucketCursor)
     for i in bucketTails.indices { bucketCursor[i] = bucketTails[i] }
@@ -232,7 +250,8 @@ enum SAIS {
 
   /// Compute bucket head and tail positions.
   private static func computeBucketBoundaries<Index: SuffixArrayIndex>(
-    _ text: [Index], alphabetSize: Int
+    _ text: [Index],
+    alphabetSize: Int
   ) -> (heads: [Int], tails: [Int]) {
     var heads = [Int](repeating: 0, count: alphabetSize)
     for c in text {
@@ -331,7 +350,10 @@ enum SAIS {
 
   /// Check if two LMS substrings are equal.
   private static func lmsSubstringsEqual<Index: SuffixArrayIndex>(
-    text: [Index], types: [Bool], i: Int, j: Int
+    text: [Index],
+    types: [Bool],
+    i: Int,
+    j: Int
   ) -> Bool {
     let n = text.count
     var pi = i

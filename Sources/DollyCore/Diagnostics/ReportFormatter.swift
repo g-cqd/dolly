@@ -26,16 +26,25 @@ public enum ReportFormatter {
   ///   - verbose: every path of a note, not the first few.
   ///   - timings: carry the phases' times in the JSON report.
   public static func format(
-    _ report: AnalysisReport, as format: OutputFormat, relativeTo root: String? = nil,
-    runNotes: [RunNote] = [], verbose: Bool = false, timings: Bool = false
+    _ report: AnalysisReport,
+    as format: OutputFormat,
+    relativeTo root: String? = nil,
+    runNotes: [RunNote] = [],
+    verbose: Bool = false,
+    timings: Bool = false
   ) -> String {
     switch format {
     case .xcode: xcode(report)
     case .json:
       encodeJSON(
         envelope(
-          report, root: root.map(SourcePath.canonical), extra: runNotes, verbose: verbose,
-          timings: timings))
+          report,
+          root: root.map(SourcePath.canonical),
+          extra: runNotes,
+          verbose: verbose,
+          timings: timings
+        )
+      )
     case .sarif: sarif(report, root: root.map(SourcePath.canonical))
     }
   }
@@ -64,23 +73,36 @@ public enum ReportFormatter {
     for finding in report.findings {
       lines.append(
         XcodeDiagnostic.line(
-          path: finding.path, line: finding.line, column: finding.column,
+          path: finding.path,
+          line: finding.line,
+          column: finding.column,
           severity: finding.severity.rawValue,
           rule: finding.rule.rawValue,
-          message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message))
+          message: finding.note.map { "\(finding.message) — \($0)" } ?? finding.message
+        )
+      )
     }
     for degraded in report.degradedFiles {
       lines.append(
         XcodeDiagnostic.line(
-          path: degraded.path, line: 1, column: 1, severity: "warning", rule: "dolly",
-          message: "file skipped: \(degraded.detail)"))
+          path: degraded.path,
+          line: 1,
+          column: 1,
+          severity: "warning",
+          rule: "dolly",
+          message: "file skipped: \(degraded.detail)"
+        )
+      )
     }
     return lines.joined(separator: "\n")
   }
 
   /// The JSON report: the analysis report's fields and the keys every analyzer's report carries (ADR-0017).
   private static func envelope(
-    _ report: AnalysisReport, root: String? = nil, extra: [RunNote] = [], verbose: Bool = false,
+    _ report: AnalysisReport,
+    root: String? = nil,
+    extra: [RunNote] = [],
+    verbose: Bool = false,
     timings: Bool = false
   ) -> ReportEnvelope<AnalysisReport> {
     var seen: Set<String> = []
@@ -99,12 +121,21 @@ public enum ReportFormatter {
     }
     notes += report.classificationIssues.map { issue in
       RunNote(
-        code: issue.code, severity: "note", message: issue.message, paths: issue.paths.map(shown),
-        verbose: verbose)
+        code: issue.code,
+        severity: "note",
+        message: issue.message,
+        paths: issue.paths.map(shown),
+        verbose: verbose
+      )
     }
     return ReportEnvelope(
-      report, tool: ToolInfo.name, version: ToolInfo.version, runNotes: notes + extra,
-      skippedFiles: skipped, timings: timings ? report.timings : nil)
+      report,
+      tool: ToolInfo.name,
+      version: ToolInfo.version,
+      runNotes: notes + extra,
+      skippedFiles: skipped,
+      timings: timings ? report.timings : nil
+    )
   }
 
   /// Deterministic pretty-printed JSON for report payloads; encoding a
@@ -135,8 +166,12 @@ public enum ReportFormatter {
         physicalLocation: Sarif.PhysicalLocation(
           artifactLocation: Sarif.ArtifactLocation(path: path, root: root),
           region: Sarif.Region(
-            startLine: line, startColumn: columns.column(column, line: line, path: path))),
-        message: message)
+            startLine: line,
+            startColumn: columns.column(column, line: line, path: path)
+          )
+        ),
+        message: message
+      )
     }
     let results = report.findings.map { finding in
       Sarif.Result(
@@ -150,7 +185,11 @@ public enum ReportFormatter {
           ? nil
           : finding.related.map {
             location(
-              $0.path, line: $0.line, column: $0.column, message: Sarif.Text("duplicate region"))
+              $0.path,
+              line: $0.line,
+              column: $0.column,
+              message: Sarif.Text("duplicate region")
+            )
           },
         partialFingerprints: ["dolly/v1": finding.fingerprint]
       )
@@ -166,7 +205,9 @@ public enum ReportFormatter {
           Sarif.Location(
             physicalLocation: Sarif.PhysicalLocation(
               artifactLocation: Sarif.ArtifactLocation(path: file.path, root: root),
-              region: Sarif.Region(startLine: 1, startColumn: 1)))
+              region: Sarif.Region(startLine: 1, startColumn: 1)
+            )
+          )
         ],
         partialFingerprints: [:]
       )
@@ -187,14 +228,19 @@ public enum ReportFormatter {
       informationUri: ToolInfo.informationURI,
       rules: RuleID.allCases.map {
         Sarif.Rule(
-          id: $0.rawValue, shortDescription: Sarif.Text($0.summary),
-          help: Sarif.Text($0.explanation))
-      })
+          id: $0.rawValue,
+          shortDescription: Sarif.Text($0.summary),
+          help: Sarif.Text($0.explanation)
+        )
+      }
+    )
     let log = Sarif.Log(runs: [
       Sarif.Run(
-        tool: Sarif.Tool(driver: driver), invocations: [Sarif.Invocation(failure: failure)],
+        tool: Sarif.Tool(driver: driver),
+        invocations: [Sarif.Invocation(failure: failure)],
         root: root,
-        results: results + degradedResults)
+        results: results + degradedResults
+      )
     ])
     return encodeJSON(log)
   }

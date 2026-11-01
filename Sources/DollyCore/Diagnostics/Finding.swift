@@ -152,7 +152,9 @@ extension Finding: Codable {
       related: try container.decodeIfPresent([RelatedLocation].self, forKey: .related) ?? [],
       fingerprintPath: try container.decodeIfPresent(String.self, forKey: .fingerprintPath),
       fingerprintAnchor: try container.decodeIfPresent(
-        RelatedLocation.self, forKey: .fingerprintAnchor)
+        RelatedLocation.self,
+        forKey: .fingerprintAnchor
+      )
     )
     // fingerprint is derived — ignored on decode, recomputed on access.
   }

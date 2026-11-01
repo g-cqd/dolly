@@ -108,18 +108,26 @@ public struct Configuration: Sendable, Codable, Equatable {
 
   /// What the shared configuration reader checks this tool's keys against (ADR-0020); the shared keys are its own.
   public static let sharedReading = SharedConfiguration.Tool(
-    name: ToolInfo.name, fileName: ".dolly.json", keys: ["rules", "duplication"])
+    name: ToolInfo.name,
+    fileName: ".dolly.json",
+    keys: ["rules", "duplication"]
+  )
 
   /// The configuration of a run (ADR-0020): `explicit` (`--config`) or the configuration directory's
   /// `.swift-analyzers.json` and `.dolly.json`, merged, every key checked; the built-in default when there is none.
   public static func resolve(
-    explicit: String?, currentDirectory: String, analyzedPaths: [String]
+    explicit: String?,
+    currentDirectory: String,
+    analyzedPaths: [String]
   ) throws(DollyError) -> (configuration: Configuration, sources: SharedConfiguration.Resolved) {
     let resolved: SharedConfiguration.Resolved
     do {
       resolved = try SharedConfiguration.resolve(
-        for: sharedReading, explicit: explicit, currentDirectory: currentDirectory,
-        analyzedPaths: analyzedPaths)
+        for: sharedReading,
+        explicit: explicit,
+        currentDirectory: currentDirectory,
+        analyzedPaths: analyzedPaths
+      )
     } catch .unreadable(let path, let reason) {
       throw .configurationUnreadable(path: path, underlying: reason)
     } catch {
@@ -135,7 +143,9 @@ public struct Configuration: Sendable, Codable, Equatable {
   /// The configuration in the file at `path`, read as `--config` reads it.
   public static func load(path: String) throws(DollyError) -> Configuration {
     try resolve(
-      explicit: path, currentDirectory: FileManager.default.currentDirectoryPath, analyzedPaths: []
+      explicit: path,
+      currentDirectory: FileManager.default.currentDirectoryPath,
+      analyzedPaths: []
     ).configuration
   }
 
@@ -154,13 +164,17 @@ public struct Configuration: Sendable, Codable, Equatable {
     }
     if let tokens = config.duplication?.minimumTokens, !(1...10000).contains(tokens) {
       throw .configurationInvalid(
-        path: path, detail: "duplication.minimumTokens must be in 1...10000")
+        path: path,
+        detail: "duplication.minimumTokens must be in 1...10000"
+      )
     }
     if let similarity = config.duplication?.minimumSimilarity,
       !(0.0...1.0).contains(similarity)
     {
       throw .configurationInvalid(
-        path: path, detail: "duplication.minimumSimilarity must be in 0.0...1.0")
+        path: path,
+        detail: "duplication.minimumSimilarity must be in 0.0...1.0"
+      )
     }
     do {
       _ = try config.regionSelection()

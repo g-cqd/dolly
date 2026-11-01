@@ -86,7 +86,8 @@
         let outputArray = outputValue.multiArrayValue
       else {
         throw SemanticEmbeddingError.inferenceFailed(
-          reason: "Model output '\(outputName)' is missing or not an MLMultiArray")
+          reason: "Model output '\(outputName)' is missing or not an MLMultiArray"
+        )
       }
       return try makeEmbeddingVector(from: outputArray)
     }
@@ -103,7 +104,8 @@
       let count = output.count
       guard count == embeddingDimension else {
         throw SemanticEmbeddingError.inferenceFailed(
-          reason: "Model produced \(count) values; expected \(embeddingDimension)")
+          reason: "Model produced \(count) values; expected \(embeddingDimension)"
+        )
       }
       var vector = [Float](repeating: 0, count: count)
       for index in 0..<count {

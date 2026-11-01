@@ -118,7 +118,8 @@ struct PrefixIndexCandidateGenerator: Sendable {
           file: file,
           startLine: Int32(clamping: document.startLine),
           endLine: Int32(clamping: document.endLine)
-        ))
+        )
+      )
     }
 
     // Phase 1: serial CSR index over PREFIX features — one contiguous
@@ -160,7 +161,9 @@ struct PrefixIndexCandidateGenerator: Sendable {
     // chunk task reuses one flat match array (touched-list reset) so the
     // hot loop performs no dictionary or allocation work.
     let probeChunks = chunkedRanges(
-      totalCount: documents.count, chunkSize: max(64, documents.count / (maxConcurrency * 8)))
+      totalCount: documents.count,
+      chunkSize: max(64, documents.count / (maxConcurrency * 8))
+    )
     let frozenPostings = postings
     let frozenRanges = featureRanges
     let frozenFeatures = sortedFeatures
@@ -168,7 +171,8 @@ struct PrefixIndexCandidateGenerator: Sendable {
     let frozenMetadata = metadata
 
     let chunkResults: [[DocumentPair]] = await ParallelProcessor.map(
-      probeChunks, maxConcurrency: maxConcurrency
+      probeChunks,
+      maxConcurrency: maxConcurrency
     ) { chunk in
       var pairs: [DocumentPair] = []
       // 0 = untouched, -1 = dead, > 0 = running match count.
@@ -261,7 +265,8 @@ struct PrefixIndexCandidateGenerator: Sendable {
 
     for partner in touched where matches[partner] > 0 {
       pairs.append(
-        DocumentPair(id1: documents[partner].id, id2: documents[documentIndex].id))
+        DocumentPair(id1: documents[partner].id, id2: documents[documentIndex].id)
+      )
     }
   }
 
