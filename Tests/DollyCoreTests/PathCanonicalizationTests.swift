@@ -12,7 +12,8 @@ import Testing
 
   private func files(in unit: String) throws -> [String] {
     try FileManager.default.contentsOfDirectory(
-      at: Self.corpusRoot.appending(path: unit), includingPropertiesForKeys: nil
+      at: Self.corpusRoot.appending(path: unit),
+      includingPropertiesForKeys: nil
     )
     .filter { $0.pathExtension == "swift" }
     .map(\.path)

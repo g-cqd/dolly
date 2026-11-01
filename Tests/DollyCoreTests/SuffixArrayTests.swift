@@ -75,7 +75,8 @@ struct SAISCorrectnessTests {
       let suffix2 = Array(tokens[sa.array[i + 1]...])
       #expect(
         suffix1.lexicographicallyPrecedes(suffix2) || suffix2.starts(with: suffix1),
-        "misordered at \(i)")
+        "misordered at \(i)"
+      )
     }
   }
 }

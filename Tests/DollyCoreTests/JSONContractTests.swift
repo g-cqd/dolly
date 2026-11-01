@@ -37,15 +37,23 @@ import Testing
     let report = AnalysisReport(
       findings: [
         Finding(
-          rule: .exactClone, severity: .warning, path: "Sources/A.swift", line: 3, column: 5,
-          message: "duplicated block", note: "same as Sources/B.swift",
-          related: [RelatedLocation(path: "Sources/B.swift", line: 9, column: 1)])
+          rule: .exactClone,
+          severity: .warning,
+          path: "Sources/A.swift",
+          line: 3,
+          column: 5,
+          message: "duplicated block",
+          note: "same as Sources/B.swift",
+          related: [RelatedLocation(path: "Sources/B.swift", line: 9, column: 1)]
+        )
       ],
-      analyzedFileCount: 2)
+      analyzedFileCount: 2
+    )
 
     let json = ReportFormatter.format(report, as: .json)
     let object = try #require(
-      JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+      JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+    )
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(Set(object.keys) == Self.topLevelKeys)
 
@@ -59,10 +67,18 @@ import Testing
   @Test("Optional fields are omitted when unset and written when set, never as null")
   func optionalFieldsAreOmittedNotNull() throws {
     let bare = Finding(
-      rule: .exactClone, severity: .warning, path: "Sources/A.swift", line: 3, column: 5,
-      message: "duplicated block")
+      rule: .exactClone,
+      severity: .warning,
+      path: "Sources/A.swift",
+      line: 3,
+      column: 5,
+      message: "duplicated block"
+    )
     var report = AnalysisReport(
-      findings: [bare], suppressed: [.init(finding: bare, reason: nil)], analyzedFileCount: 1)
+      findings: [bare],
+      suppressed: [.init(finding: bare, reason: nil)],
+      analyzedFileCount: 1
+    )
 
     let unset = try Self.jsonObject(report)
     let finding = try #require((unset["findings"] as? [[String: Any]])?.first)
@@ -82,6 +98,7 @@ import Testing
   private static func jsonObject(_ report: AnalysisReport) throws -> [String: Any] {
     try #require(
       JSONSerialization.jsonObject(with: Data(ReportFormatter.format(report, as: .json).utf8))
-        as? [String: Any])
+        as? [String: Any]
+    )
   }
 }

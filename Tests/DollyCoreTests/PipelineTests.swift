@@ -49,7 +49,8 @@ import Testing
 
     // Cold, then warm: a cached run must not analyze the file either.
     let analyzer = Analyzer(
-      cache: CacheLocation(root: dir.appending(path: "cache").path, workspace: dir.path))
+      cache: CacheLocation(root: dir.appending(path: "cache").path, workspace: dir.path)
+    )
     for _ in 0..<2 {
       let report = await analyzer.analyze(files: [bad.path, good.path])
       let degraded = report.degradedFiles.map { URL(fileURLWithPath: $0.path).lastPathComponent }
@@ -63,8 +64,13 @@ import Testing
     let scratch = try TemporaryTestDirectory(prefix: "dolly-bl")
     defer { withExtendedLifetime(scratch) {} }
     let finding = Finding(
-      rule: try #require(RuleID.allCases.first), severity: .warning,
-      path: "a.swift", line: 1, column: 1, message: "m")
+      rule: try #require(RuleID.allCases.first),
+      severity: .warning,
+      path: "a.swift",
+      line: 1,
+      column: 1,
+      message: "m"
+    )
     let path = scratch.url.appending(path: "baseline.json").path
     try Baseline(findings: [finding]).write(path: path)
     let loaded = try Baseline.load(path: path)

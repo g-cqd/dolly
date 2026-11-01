@@ -14,8 +14,13 @@ import Testing
   /// A ~70-token function template whose every identifier and literal is
   /// substitutable.
   private static func function(
-    name: String, input: String, sum: String, product: String,
-    limit: String, factor: String, offset: String
+    name: String,
+    input: String,
+    sum: String,
+    product: String,
+    limit: String,
+    factor: String,
+    offset: String
   ) -> String {
     """
     func \(name)(\(input): [Double]) -> Double {
@@ -35,8 +40,14 @@ import Testing
   }
 
   private static let baseFunction = function(
-    name: "aggregateScores", input: "scores", sum: "total", product: "compound",
-    limit: "12.5", factor: "1.75", offset: "3.25")
+    name: "aggregateScores",
+    input: "scores",
+    sum: "total",
+    product: "compound",
+    limit: "12.5",
+    factor: "1.75",
+    offset: "3.25"
+  )
 
   /// Full alpha-renames of the base function: every identifier and every
   /// literal differs, so no 50-token run of raw tokens can survive.
@@ -44,25 +55,45 @@ import Testing
     (
       "rename set 1",
       function(
-        name: "combineWeights", input: "weights", sum: "left", product: "right",
-        limit: "99.0", factor: "42.5", offset: "0.125")
+        name: "combineWeights",
+        input: "weights",
+        sum: "left",
+        product: "right",
+        limit: "99.0",
+        factor: "42.5",
+        offset: "0.125"
+      )
     ),
     (
       "rename set 2",
       function(
-        name: "foldMeasurements", input: "samples", sum: "acc", product: "mult",
-        limit: "7.75", factor: "88.25", offset: "654.5")
+        name: "foldMeasurements",
+        input: "samples",
+        sum: "acc",
+        product: "mult",
+        limit: "7.75",
+        factor: "88.25",
+        offset: "654.5"
+      )
     ),
     (
       "rename set 3",
       function(
-        name: "mergeDeltas", input: "deltas", sum: "high", product: "low",
-        limit: "1.5", factor: "2.25", offset: "9.875")
+        name: "mergeDeltas",
+        input: "deltas",
+        sum: "high",
+        product: "low",
+        limit: "1.5",
+        factor: "2.25",
+        offset: "9.875"
+      )
     ),
   ]
 
   @Test(
-    "Alpha-renaming a clone still yields a near-clone (never an exact-clone)", arguments: renames)
+    "Alpha-renaming a clone still yields a near-clone (never an exact-clone)",
+    arguments: renames
+  )
   func renamedCloneIsNearClone(_ variant: (label: String, source: String)) async {
     let source = Self.baseFunction + "\n\n" + variant.source + "\n"
     let report = await Analyzer().analyze(source: source, path: "renamed.swift")
@@ -77,17 +108,29 @@ import Testing
     let original =
       Self.baseFunction + "\n\n"
       + Self.function(
-        name: "aggregateScoresCopy", input: "scores", sum: "total", product: "compound",
-        limit: "12.5", factor: "1.75", offset: "3.25") + "\n"
+        name: "aggregateScoresCopy",
+        input: "scores",
+        sum: "total",
+        product: "compound",
+        limit: "12.5",
+        factor: "1.75",
+        offset: "3.25"
+      ) + "\n"
     let originalReport = await Analyzer().analyze(source: original, path: "pair.swift")
     #expect(
       originalReport.findings.contains { $0.rule == .exactClone },
-      "identical pair must produce an exact-clone")
+      "identical pair must produce an exact-clone"
+    )
 
     // Swap the two branch statements in the copy: same tokens, new order.
     let reorderedCopy = Self.function(
-      name: "aggregateScoresCopy", input: "scores", sum: "total", product: "compound",
-      limit: "12.5", factor: "1.75", offset: "3.25"
+      name: "aggregateScoresCopy",
+      input: "scores",
+      sum: "total",
+      product: "compound",
+      limit: "12.5",
+      factor: "1.75",
+      offset: "3.25"
     )
     .replacingOccurrences(of: "total += element * 1.75", with: "total *= element + 3.25")
     .replacingOccurrences(of: "compound *= element + 3.25", with: "compound += element * 1.75")
@@ -95,7 +138,8 @@ import Testing
     let reorderedReport = await Analyzer().analyze(source: reordered, path: "pair.swift")
     #expect(
       !reorderedReport.findings.contains { $0.rule == .exactClone },
-      "reordered statements must not match as an exact clone")
+      "reordered statements must not match as an exact clone"
+    )
   }
 
   @Test("Cross-file clone group is detected via analyze(files:)")
@@ -171,7 +215,8 @@ import Testing
     #expect(silent.findings.isEmpty)
 
     let tuned = Configuration(
-      duplication: .init(minimumTokens: 20, minimumSimilarity: 0.8))
+      duplication: .init(minimumTokens: 20, minimumSimilarity: 0.8)
+    )
     let loud = await Analyzer(configuration: tuned).analyze(source: tiny, path: "tiny.swift")
     #expect(loud.findings.contains { $0.rule == .exactClone })
   }

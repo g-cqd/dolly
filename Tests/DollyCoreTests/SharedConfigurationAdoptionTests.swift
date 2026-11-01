@@ -17,7 +17,8 @@ import Testing
       .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
     func modified(_ url: URL) -> Date {
       (try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path))?[
-        .modificationDate]
+        .modificationDate
+      ]
         as? Date ?? .distantPast
     }
     return try #require(candidates.max { modified($0) < modified($1) }, "build \(tool) first")
@@ -40,7 +41,9 @@ import Testing
     for (path, text) in files {
       let url = root.appending(path: path)
       try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       try Data(text.utf8).write(to: url)
     }
     return root
@@ -56,7 +59,9 @@ import Testing
   }
 
   private static func run(
-    _ configuration: [String: String], from directory: String = "", _ arguments: [String] = []
+    _ configuration: [String: String],
+    from directory: String = "",
+    _ arguments: [String] = []
   )
     throws -> Run
   {
@@ -78,13 +83,15 @@ import Testing
     process.waitUntilExit()
     let report = try? JSONSerialization.jsonObject(with: Data(contentsOf: output)) as? [String: Any]
     return Run(
-      status: process.terminationStatus, analyzedFileCount: report?["analyzedFileCount"] as? Int,
+      status: process.terminationStatus,
+      analyzedFileCount: report?["analyzedFileCount"] as? Int,
       reported: tool == "deadwood"
         ? (report?["findings"] as? [[String: Any]]).map {
           Set($0.compactMap { $0["path"] as? String }).count
         }
         : report?["analyzedFileCount"] as? Int,
-      errors: String(decoding: try Data(contentsOf: errors), as: UTF8.self))
+      errors: String(decoding: try Data(contentsOf: errors), as: UTF8.self)
+    )
   }
 
   @Test func `exclude from the shared top level, the tool's section and the tool's file add up`()
@@ -101,7 +108,9 @@ import Testing
 
   @Test func `run from a subdirectory, the project root's configuration is read`() throws {
     let run = try Self.run(
-      [".swift-analyzers.json": #"{"exclude": ["Sources/One/"]}"#], from: "Sources/Two")
+      [".swift-analyzers.json": #"{"exclude": ["Sources/One/"]}"#],
+      from: "Sources/Two"
+    )
     #expect(run.status == 0 && run.reported == 4)
   }
 

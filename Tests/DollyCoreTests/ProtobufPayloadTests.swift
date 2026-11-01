@@ -53,7 +53,8 @@ import Testing
     #expect(!facts.directives.isEmpty && !facts.previewSpans.isEmpty && !facts.boundaries.isEmpty)
     let bytes = try ProtobufEncoder().encodeToBytes(original)
     let decoded = try #require(
-      try ProtobufDecoder().decode(ExtractedFile.self, fromBytes: bytes).facts)
+      try ProtobufDecoder().decode(ExtractedFile.self, fromBytes: bytes).facts
+    )
     #expect(decoded.recordData == facts.recordData)
     #expect(decoded.strings == facts.strings)
     #expect(decoded.kindData == facts.kindData)
@@ -64,12 +65,15 @@ import Testing
     #expect(decoded.previewSpans == facts.previewSpans)
     #expect(
       try ProtobufEncoder().encodeToBytes(ExtractedFile(facts: decoded, degraded: nil)) == bytes,
-      "byte-stable")
+      "byte-stable"
+    )
 
     let degraded = try ProtobufDecoder().decode(
       ExtractedFile.self,
       fromBytes: ProtobufEncoder().encodeToBytes(
-        ExtractedFile(facts: nil, degraded: "not valid UTF-8")))
+        ExtractedFile(facts: nil, degraded: "not valid UTF-8")
+      )
+    )
     #expect(degraded.degraded == "not valid UTF-8" && degraded.facts == nil)
   }
 

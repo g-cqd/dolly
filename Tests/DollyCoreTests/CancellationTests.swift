@@ -50,11 +50,13 @@ import Testing
     let directory = NSTemporaryDirectory()
     let before = Set(
       try FileManager.default.contentsOfDirectory(atPath: directory)
-        .filter { $0.hasPrefix("dolly-cancel-") })
+        .filter { $0.hasPrefix("dolly-cancel-") }
+    )
     _ = try makeWorkspace()
     let after = Set(
       try FileManager.default.contentsOfDirectory(atPath: directory)
-        .filter { $0.hasPrefix("dolly-cancel-") })
+        .filter { $0.hasPrefix("dolly-cancel-") }
+    )
     #expect(after == before)
   }
 }

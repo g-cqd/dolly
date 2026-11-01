@@ -114,7 +114,9 @@ struct MinHashGenerator: Sendable {
   ) -> MinHashSignature {
     guard !shingleHashes.isEmpty else {
       return MinHashSignature(
-        values: Array(repeating: UInt64.max, count: numHashes), documentId: documentId)
+        values: Array(repeating: UInt64.max, count: numHashes),
+        documentId: documentId
+      )
     }
 
     // Use SIMD-optimized path for larger signatures. The set is iterated
@@ -290,7 +292,8 @@ extension MinHashGenerator {
             documentId1: first.documentId,
             documentId2: second.documentId,
             similarity: similarity
-          ))
+          )
+        )
       }
     }
 

@@ -51,14 +51,16 @@ struct PrefixIndexTests {
           shingleHashes: features,
           shingles: [],
           id: id
-        ))
+        )
+      )
     }
     return documents
   }
 
   @Test(
     "candidates are a superset of brute-force Jaccard >= 0.8 pairs",
-    arguments: [UInt64(0xD011_F00D), 7, 42, 0xBEEF])
+    arguments: [UInt64(0xD011_F00D), 7, 42, 0xBEEF]
+  )
   func candidatesCoverBruteForce(seed: UInt64) async {
     let documents = makeDocuments(seed: seed, count: 48)
     let candidates = await PrefixIndexCandidateGenerator(threshold: 0.8, maxConcurrency: 4)
@@ -67,12 +69,15 @@ struct PrefixIndexTests {
     var truePairCount = 0
     for (first, second) in documents.pairCombinations() {
       let jaccard = MinHashGenerator.exactJaccardSimilarity(
-        first.shingleHashes, second.shingleHashes)
+        first.shingleHashes,
+        second.shingleHashes
+      )
       guard jaccard >= 0.8 else { continue }
       truePairCount += 1
       #expect(
         candidates.contains(DocumentPair(id1: first.id, id2: second.id)),
-        "missing true pair \(first.id)-\(second.id) with Jaccard \(jaccard)")
+        "missing true pair \(first.id)-\(second.id) with Jaccard \(jaccard)"
+      )
     }
     // The corpus construction (mutated near-copies) must actually produce
     // true pairs, or the superset property is vacuous.
@@ -96,15 +101,33 @@ struct PrefixIndexTests {
     // Two documents sharing exactly 9 of 10 features: Jaccard 9/11 ≈ 0.82.
     let shared: Set<UInt64> = Set((0..<9).map { UInt64(100 + $0) })
     let first = ShingledDocument(
-      file: "a.swift", startLine: 1, endLine: 2, tokenCount: 10,
-      shingleHashes: shared.union([555]), shingles: [], id: 0)
+      file: "a.swift",
+      startLine: 1,
+      endLine: 2,
+      tokenCount: 10,
+      shingleHashes: shared.union([555]),
+      shingles: [],
+      id: 0
+    )
     let second = ShingledDocument(
-      file: "b.swift", startLine: 1, endLine: 2, tokenCount: 10,
-      shingleHashes: shared.union([777]), shingles: [], id: 1)
+      file: "b.swift",
+      startLine: 1,
+      endLine: 2,
+      tokenCount: 10,
+      shingleHashes: shared.union([777]),
+      shingles: [],
+      id: 1
+    )
     // And a third with disjoint features — never a candidate.
     let third = ShingledDocument(
-      file: "c.swift", startLine: 1, endLine: 2, tokenCount: 10,
-      shingleHashes: Set((0..<10).map { UInt64(9000 + $0) }), shingles: [], id: 2)
+      file: "c.swift",
+      startLine: 1,
+      endLine: 2,
+      tokenCount: 10,
+      shingleHashes: Set((0..<10).map { UInt64(9000 + $0) }),
+      shingles: [],
+      id: 2
+    )
 
     let candidates = await PrefixIndexCandidateGenerator(threshold: 0.8)
       .candidatePairs(for: [first, second, third])

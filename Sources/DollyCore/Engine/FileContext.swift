@@ -33,19 +33,24 @@ struct FileContext: Sendable, Codable, Equatable {
 
   /// The context `classification` gives the file: its project first, then its content (ADR-0024).
   init(
-    path: String, tree: SourceFileSyntax, converter: SourceLocationConverter,
+    path: String,
+    tree: SourceFileSyntax,
+    converter: SourceLocationConverter,
     classification: ProjectClassification = .conventionsOnly
   ) {
     self.init(
       region: classification.classify(path, tree: tree).region,
-      previewSpans: Self.previewSpans(tree, converter: converter))
+      previewSpans: Self.previewSpans(tree, converter: converter)
+    )
   }
 
   /// The context of a file of `region` with `previewSpans`.
   init(region: CodeRegion, previewSpans: [LineSpan]) {
     self.init(
-      isGenerated: region.contains(.generated), isTestCode: region.contains(.test),
-      previewSpans: previewSpans)
+      isGenerated: region.contains(.generated),
+      isTestCode: region.contains(.test),
+      previewSpans: previewSpans
+    )
   }
 
   /// `#Preview` bodies and `PreviewProvider` types, as line spans.

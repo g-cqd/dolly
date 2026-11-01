@@ -86,7 +86,8 @@ struct TokenSequenceExtractor: Sendable {
           normID: normID,
           line: Int32(clamping: location.line),
           column: Int32(clamping: location.column)
-        ))
+        )
+      )
       kinds.append(kind)
     }
 

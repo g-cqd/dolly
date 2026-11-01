@@ -42,7 +42,8 @@ struct LCPArray<Index: SuffixArrayIndex>: Sendable {
 enum LCPArrayBuilder {
   /// Build LCP array using Kasai's algorithm.
   static func build<Index: SuffixArrayIndex>(
-    suffixArray: SuffixArray<Index>, tokens: [Index]
+    suffixArray: SuffixArray<Index>,
+    tokens: [Index]
   ) -> [Index] {
     let n = tokens.count
     guard n > 0 else { return [] }
@@ -155,7 +156,8 @@ extension LCPArray {
   /// - Complexity: O(*n* + *g* log *g* + *k*), for a stream of length *n*,
   ///   *g* groups, and kept occurrences of total length *k*.
   static func mergeOverlappingGroups(
-    _ groups: [RepeatGroup], streamLength: Int
+    _ groups: [RepeatGroup],
+    streamLength: Int
   ) -> [RepeatGroup] {
     guard !groups.isEmpty else { return [] }
 

@@ -149,23 +149,38 @@ import Testing
     // Uncapped (maxGroupSize 0): the whole component survives as one group
     // whose membership is well past any sane cap.
     let uncapped = try await EmbeddingCloneDiscovery().discover(
-      snippets: many, provider: provider, k: 40,
-      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 0)
+      snippets: many,
+      provider: provider,
+      k: 40,
+      similarityThreshold: 0.9,
+      minTokenOverlap: 0.2,
+      maxGroupSize: 0
+    )
     #expect(uncapped.count == 1)
     #expect((uncapped.first?.clones.count ?? 0) > 25)
 
     // Capped at 25: that oversized group is dropped wholesale as noise.
     let capped = try await EmbeddingCloneDiscovery().discover(
-      snippets: many, provider: provider, k: 40,
-      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 25)
+      snippets: many,
+      provider: provider,
+      k: 40,
+      similarityThreshold: 0.9,
+      minTokenOverlap: 0.2,
+      maxGroupSize: 25
+    )
     #expect(capped.isEmpty, "a group past the cap is dropped as embedding-collapse noise")
 
     // A legitimate small family (3 members — the shape a tight, code-trained
     // bundle model produces) sits well under the cap and survives untouched.
     let few = (0..<3).map { snippet("G\($0).swift", code) }
     let small = try await EmbeddingCloneDiscovery().discover(
-      snippets: few, provider: provider, k: 5,
-      similarityThreshold: 0.9, minTokenOverlap: 0.2, maxGroupSize: 25)
+      snippets: few,
+      provider: provider,
+      k: 5,
+      similarityThreshold: 0.9,
+      minTokenOverlap: 0.2,
+      maxGroupSize: 25
+    )
     #expect(small.count == 1)
     #expect(small.first?.clones.count == 3)
   }

@@ -85,7 +85,8 @@ struct LCPCorrectnessTests {
 
       #expect(
         lcp.array[i] == expectedLCP,
-        "LCP[\(i)] should be \(expectedLCP) but got \(lcp.array[i])")
+        "LCP[\(i)] should be \(expectedLCP) but got \(lcp.array[i])"
+      )
     }
   }
 

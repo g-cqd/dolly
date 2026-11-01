@@ -215,7 +215,8 @@ enum CorpusAssembler {
           boundaries: file.boundaries,
           hasSourceLocationDirective: file.hasSourceLocationDirective,
           text: file.text
-        ))
+        )
+      )
     }
 
     return TokenCorpus(sequences: sequences, strings: strings)

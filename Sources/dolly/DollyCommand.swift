@@ -64,19 +64,24 @@ struct Analyze: AsyncParsableCommand {
     help: ArgumentHelp(
       "Semantic (Type-4) clone detection: embed function snippets and report idiom-level clones "
         + "the token detectors miss. Opt-in and macOS-only (CoreML/NaturalLanguage); degrades to "
-        + "structural-only elsewhere."))
+        + "structural-only elsewhere."
+    )
+  )
   var semantic = false
 
   @Option(
     name: .customLong("embedding-bundle"),
     help: ArgumentHelp(
       "Directory with a HuggingFace tokenizer + Core ML model to use for --semantic (higher "
-        + "recall). Default: Apple's on-device NLContextualEmbedding (zero download, macOS 14+)."))
+        + "recall). Default: Apple's on-device NLContextualEmbedding (zero download, macOS 14+)."
+    )
+  )
   var embeddingBundle: String?
 
   @Option(
     name: .customLong("embedding-preset"),
-    help: ArgumentHelp("Threshold preset for --semantic: balanced (default), strict, or loose."))
+    help: ArgumentHelp("Threshold preset for --semantic: balanced (default), strict, or loose.")
+  )
   var embeddingPreset: SemanticPreset = .balanced
 
   @Option(
@@ -84,7 +89,9 @@ struct Analyze: AsyncParsableCommand {
     help: ArgumentHelp(
       "Drop any --semantic clone group larger than this many members (default 25). Huge groups "
         + "are the embedding-collapse pathology of the zero-download NLContextual model, not real "
-        + "clone families. Set 0 to disable the cap."))
+        + "clone families. Set 0 to disable the cap."
+    )
+  )
   var semanticMaxGroup: Int = 25
 
   func run() async throws {
@@ -140,11 +147,16 @@ struct Analyze: AsyncParsableCommand {
     let semanticOptions: SemanticOptions? =
       semantic
       ? SemanticOptions(
-        bundlePath: embeddingBundle, preset: embeddingPreset, maxGroupSize: semanticMaxGroup)
+        bundlePath: embeddingBundle,
+        preset: embeddingPreset,
+        maxGroupSize: semanticMaxGroup
+      )
       : nil
     var report = await Analyzer(
-      configuration: configuration, cache: cache.noCache ? nil : cacheLocation(),
-      semantic: semanticOptions, reportScope: reportScope
+      configuration: configuration,
+      cache: cache.noCache ? nil : cacheLocation(),
+      semantic: semanticOptions,
+      reportScope: reportScope
     ).analyze(files: files)
     let relativeTo = output.relativeTo
 
@@ -153,7 +165,8 @@ struct Analyze: AsyncParsableCommand {
     // with nothing on stdout.
     if report.wasCancelled {
       writeStandardError(
-        "dolly: run cancelled before the corpus was complete; no findings reported\n")
+        "dolly: run cancelled before the corpus was complete; no findings reported\n"
+      )
       throw ExitCode(ExitStatus.internalFailure.rawValue)
     }
 
@@ -169,8 +182,12 @@ struct Analyze: AsyncParsableCommand {
         report = report.relativized(to: relativeTo)
       }
       let text = ReportFormatter.format(
-        report, as: OutputFormat(output.format), relativeTo: relativeTo, verbose: output.verbose,
-        timings: output.timings)
+        report,
+        as: OutputFormat(output.format),
+        relativeTo: relativeTo,
+        verbose: output.verbose,
+        timings: output.timings
+      )
       if !text.isEmpty {
         print(text)
       }
@@ -207,10 +224,16 @@ struct Analyze: AsyncParsableCommand {
     if let newSinceBaseline {
       let known = Set(newSinceBaseline.fingerprints)
       baselineMatchesNothing = NewSince.matchesNothing(
-        report.findings + report.outOfScope, in: known, fingerprint: \.fingerprint)
+        report.findings + report.outOfScope,
+        in: known,
+        fingerprint: \.fingerprint
+      )
       let promotion = NewSince.promote(
-        inScope: report.findings, outOfScope: report.outOfScope, notIn: known,
-        fingerprint: \.fingerprint)
+        inScope: report.findings,
+        outOfScope: report.outOfScope,
+        notIn: known,
+        fingerprint: \.fingerprint
+      )
       report.findings = promotion.reported.sorted()
       report.outOfScope = promotion.outOfScope
       promoted = promotion.promoted
@@ -235,16 +258,23 @@ struct Analyze: AsyncParsableCommand {
       // Counted after --baseline, so the note states what the report shows.
       let count = report.findings.count(where: { promoted.contains($0.fingerprint) })
       for message in NewSince.notes(
-        promoted: count, matchesNothing: baselineMatchesNothing, baseline: path)
-      {
+        promoted: count,
+        matchesNothing: baselineMatchesNothing,
+        baseline: path
+      ) {
         extraNotes.append(RunNote(code: "report-new-since", severity: "note", message: message))
         note(message)
       }
     }
 
     let text = ReportFormatter.format(
-      report, as: OutputFormat(output.format), relativeTo: relativeTo, runNotes: extraNotes,
-      verbose: output.verbose, timings: output.timings)
+      report,
+      as: OutputFormat(output.format),
+      relativeTo: relativeTo,
+      runNotes: extraNotes,
+      verbose: output.verbose,
+      timings: output.timings
+    )
     if !text.isEmpty {
       print(text)
     }
@@ -280,7 +310,10 @@ struct Analyze: AsyncParsableCommand {
     let root =
       cache.cachePath.map { SourcePath.absolute($0) }
       ?? CacheLocation.defaultRoot(
-        tool: ToolInfo.name, environment: environment, home: environment["HOME"] ?? "/tmp")
+        tool: ToolInfo.name,
+        environment: environment,
+        home: environment["HOME"] ?? "/tmp"
+      )
     let workspace =
       ProjectLayout.discover(paths: input.paths)?.root
       ?? SourcePath.absolute(input.paths.first ?? ".")
@@ -294,7 +327,8 @@ struct Analyze: AsyncParsableCommand {
     if output.writeBaseline != nil, !input.only.isEmpty || input.onlyFrom != nil {
       throw ValidationError(
         "--write-baseline records whole-corpus debt and cannot be combined with "
-          + "--only/--only-from. Write the baseline unscoped, then scope the runs that use it.")
+          + "--only/--only-from. Write the baseline unscoped, then scope the runs that use it."
+      )
     }
     // Without a scope every finding is already reported, so there is nothing to promote (ADR-0028).
     if output.reportNewSince != nil, input.only.isEmpty, input.onlyFrom == nil {
@@ -355,7 +389,8 @@ struct Analyze: AsyncParsableCommand {
         // Spaces and tabs at either end; a stray \r too.
         let trimmable: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
         var entry = String(
-          line.drop(while: trimmable).reversed().drop(while: trimmable).reversed())
+          line.drop(while: trimmable).reversed().drop(while: trimmable).reversed()
+        )
         // git C-quotes paths with special bytes unless core.quotepath=false;
         // strip the quotes so plain quoted paths keep matching.
         if entry.hasPrefix("\"") && entry.hasSuffix("\"") && entry.count >= 2 {
@@ -414,8 +449,10 @@ struct Analyze: AsyncParsableCommand {
   /// `--config`, or the configuration directory's shared and own files (ADR-0020).
   private func loadConfigurationUncaught() throws -> Configuration {
     let resolved = try Configuration.resolve(
-      explicit: input.config, currentDirectory: FileManager.default.currentDirectoryPath,
-      analyzedPaths: input.paths)
+      explicit: input.config,
+      currentDirectory: FileManager.default.currentDirectoryPath,
+      analyzedPaths: input.paths
+    )
     if output.verbose {
       for line in resolved.sources.verboseLines(tool: ToolInfo.name) { note(line) }
     }
@@ -441,14 +478,16 @@ struct Analyze: AsyncParsableCommand {
         // so a linked Sources/ would classify as a "file", degrade, and
         // exit 0 over zero analyzed code.
         let attributes = try? FileManager.default.attributesOfItem(
-          atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path),
+          atPath: URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        ),
         let type = attributes[.type] as? FileAttributeType
       else {
         throw ValidationError("no such file or directory: \(path)")
       }
       if type == .typeDirectory {
         files.formUnion(
-          SourceDiscovery.swiftFiles(under: path, isExcluded: isExcluded))
+          SourceDiscovery.swiftFiles(under: path, isExcluded: isExcluded)
+        )
       } else if !isExcluded(URL(fileURLWithPath: path).path) {
         files.insert(URL(fileURLWithPath: path).path)
       }
@@ -488,6 +527,7 @@ struct Rules: ParsableCommand {
         // @dl:accept:this <rule|all> [-- reason]
         // @dl:accept:next <rule|all> [-- reason]
         // @dl:disable <rule|all> … // @dl:enable <rule|all>
-      """)
+      """
+    )
   }
 }

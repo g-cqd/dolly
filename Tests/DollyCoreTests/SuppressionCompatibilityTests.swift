@@ -15,7 +15,9 @@ import Testing
         SuppressionDirective.parse(
           comment:
             "/* @\(prefix)accept:this exact-clone, near-clone exact-clone future -- reviewed */",
-          line: 7))
+          line: 7
+        )
+      )
       #expect(parsed.kind == .acceptThis)
       #expect(parsed.line == 7)
       #expect(parsed.reason == "reviewed")
@@ -33,7 +35,8 @@ import Testing
       #expect(SuppressionDirective.parse(comment: "/// @\(prefix)accept", line: 1) == nil)
       #expect(SuppressionDirective.parse(comment: "/** @\(prefix)accept */", line: 1) == nil)
       #expect(
-        SuppressionDirective.parse(comment: "// @\(prefix)accept --  ", line: 1)?.reason == "")
+        SuppressionDirective.parse(comment: "// @\(prefix)accept --  ", line: 1)?.reason == ""
+      )
     }
   }
 

@@ -74,9 +74,11 @@ public struct Analyzer: Sendable {
     let scan: CorpusScan<ExtractedFile>
     do {
       scan = try await CorpusScanner.scan(
-        paths: files, cache: cache,
+        paths: files,
+        cache: cache,
         identity: CacheIdentity.current(tool: ToolInfo.name, version: ToolInfo.version),
-        width: ConcurrencyConfiguration.default.maxConcurrentFiles, keepingBytes: true
+        width: ConcurrencyConfiguration.default.maxConcurrentFiles,
+        keepingBytes: true
       ) { path, bytes in Self.extract(bytes: bytes, path: path) }
     } catch {
       var cancelled = AnalysisReport()
@@ -90,7 +92,8 @@ public struct Analyzer: Sendable {
     for file in scan.files {
       if let failure = file.failure {
         report.degradedFiles.append(
-          .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)"))
+          .init(path: file.path, detail: "read failed or exceeds size cap: \(failure)")
+        )
         continue
       }
       guard let extracted = file.facts, let bytes = file.bytes else { continue }
@@ -100,18 +103,24 @@ public struct Analyzer: Sendable {
       }
       guard let facts = extracted.facts,
         let tokens = facts.fileTokens(
-          path: file.path, source: String(decoding: bytes, as: UTF8.self))
+          path: file.path,
+          source: String(decoding: bytes, as: UTF8.self)
+        )
       else {
         report.degradedFiles.append(.init(path: file.path, detail: "cached facts did not rebuild"))
         continue
       }
       let region = classification.classify(
-        file.path, content: CodeRegion(rawValue: facts.contentRegion)
+        file.path,
+        content: CodeRegion(rawValue: facts.contentRegion)
       ).region
       prepared.append(
         PreparedFile(
-          tokens: tokens, table: SuppressionTable(directives: facts.directives),
-          context: FileContext(region: region, previewSpans: facts.previewSpans)))
+          tokens: tokens,
+          table: SuppressionTable(directives: facts.directives),
+          context: FileContext(region: region, previewSpans: facts.previewSpans)
+        )
+      )
       if cache != nil {
         if file.cacheHit { report.cacheHits += 1 } else { report.cacheMisses += 1 }
       }
@@ -163,7 +172,10 @@ public struct Analyzer: Sendable {
       return report
     }
     let prepared = PreparedFile(
-      tokens: tokens, table: SuppressionTable(directives: directives), context: context)
+      tokens: tokens,
+      table: SuppressionTable(directives: directives),
+      context: context
+    )
     await runEngine(over: [prepared], into: &report)
     report.findings.sort()
     return report
@@ -190,7 +202,8 @@ public struct Analyzer: Sendable {
     guard bytes.count <= sourceByteCap else {
       return ExtractedFile(
         facts: nil,
-        degraded: "read failed or exceeds size cap: \(bytes.count) bytes, over \(sourceByteCap)")
+        degraded: "read failed or exceeds size cap: \(bytes.count) bytes, over \(sourceByteCap)"
+      )
     }
     // Swift sources are UTF-8. Repairing invalid bytes would analyze text
     // that is not in the file, and hide the file from the degraded count.
@@ -205,10 +218,13 @@ public struct Analyzer: Sendable {
     let tokens = TokenSequenceExtractor().extract(from: tree, file: path, source: source)
     return ExtractedFile(
       facts: CachedFileFacts(
-        tokens: tokens, directives: DirectiveScanner.scan(tree: tree, converter: converter),
+        tokens: tokens,
+        directives: DirectiveScanner.scan(tree: tree, converter: converter),
         contentRegion: ProjectClassification.contentRegion(path: path, tree: tree),
-        previewSpans: FileContext.previewSpans(tree, converter: converter)),
-      degraded: nil)
+        previewSpans: FileContext.previewSpans(tree, converter: converter)
+      ),
+      degraded: nil
+    )
   }
 
   /// Parse once; derive directives and the interned tokens from that tree.
@@ -222,7 +238,8 @@ public struct Analyzer: Sendable {
   /// ``extractFacts(source:path:)`` on a large stack: parsing and every walk of the tree recurse once per level
   /// (analyzerkit roadmap 0041).
   private static func extractOnLargeStack(
-    source: String, path: String
+    source: String,
+    path: String
   ) async -> (FileTokens, [SuppressionDirective], FileContext)? {
     await LargeStack.run { extractFacts(source: source, path: path) }
   }
@@ -230,7 +247,8 @@ public struct Analyzer: Sendable {
   /// The uncached extraction path: parse, scan directives, intern tokens. Nil when the tree nests past
   /// ``SyntaxDepth/defaultLimit``, which no walk below can take.
   private static func extractFacts(
-    source: String, path: String
+    source: String,
+    path: String
   ) -> (FileTokens, [SuppressionDirective], FileContext)? {
     let tree = Parser.parse(source: source)
     if SyntaxDepth.exceeds(tree) { return nil }
@@ -263,7 +281,9 @@ public struct Analyzer: Sendable {
     var previewGroupCount = 0
     defer {
       report.contextNote = ProjectWeighting.note(
-        generatedFileCount: generatedCount, previewGroupCount: previewGroupCount)
+        generatedFileCount: generatedCount,
+        previewGroupCount: previewGroupCount
+      )
     }
     guard !prepared.isEmpty else { return }
     // The token/suffix-array engine handles exact/near/structural; the
@@ -294,18 +314,24 @@ public struct Analyzer: Sendable {
     // token detectors already reported.
     if semanticActive, let semantic {
       groups.append(
-        contentsOf: await runSemanticPass(over: prepared, options: semantic, into: &report))
+        contentsOf: await runSemanticPass(over: prepared, options: semantic, into: &report)
+      )
     }
 
     let contexts = prepared.keyed(by: \.tokens.file).mapValues(\.context)
     let weighted = ProjectWeighting.withoutPreviews(
-      groups, contexts: contexts, regionSelection: regionSelection)
+      groups,
+      contexts: contexts,
+      regionSelection: regionSelection
+    )
     groups = weighted.groups
     previewGroupCount = weighted.droppedGroupCount
 
     let tables = prepared.keyed(by: \.tokens.file).mapValues(\.table)
     let findings = CloneReporting.findings(
-      from: groups, configuration: configuration, contexts: contexts,
+      from: groups,
+      configuration: configuration,
+      contexts: contexts,
       regionSelection: regionSelection
     )
     .map { ProjectWeighting.weighted($0, contexts: contexts, regionSelection: regionSelection) }
@@ -334,7 +360,9 @@ public struct Analyzer: Sendable {
   /// semantic groups (empty when a provider is unavailable — the macOS-only
   /// capability degrades gracefully rather than failing).
   private func runSemanticPass(
-    over prepared: [PreparedFile], options: SemanticOptions, into report: inout AnalysisReport
+    over prepared: [PreparedFile],
+    options: SemanticOptions,
+    into report: inout AnalysisReport
   ) async -> [CloneGroup] {
     switch await SemanticDiscovery.resolveProvider(options) {
     case .unavailable(let note):
@@ -345,11 +373,17 @@ public struct Analyzer: Sendable {
       for file in prepared {
         snippets.append(
           contentsOf: FunctionSnippetExtractor.extract(
-            source: file.tokens.text.source, file: file.tokens.file))
+            source: file.tokens.text.source,
+            file: file.tokens.file
+          )
+        )
       }
       do {
         let groups = try await SemanticDiscovery.discover(
-          snippets: snippets, provider: provider, options: options)
+          snippets: snippets,
+          provider: provider,
+          options: options
+        )
         let capLabel = options.maxGroupSize > 0 ? "\(options.maxGroupSize)/group" : "off"
         report.semanticNote =
           "semantic: embedded \(snippets.count) snippet(s) via \(provider.providerName), "

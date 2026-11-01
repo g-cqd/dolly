@@ -15,7 +15,8 @@ import Testing
   private func analyzeUnit(_ name: String) async throws -> AnalysisReport {
     let dir = Self.corpusRoot.appending(path: name)
     let files = try FileManager.default.contentsOfDirectory(
-      at: dir, includingPropertiesForKeys: nil
+      at: dir,
+      includingPropertiesForKeys: nil
     )
     .filter { $0.pathExtension == "swift" }
     .map(\.path)

@@ -126,7 +126,11 @@ import Testing
   /// `(line, column)` in the named sequence — the ground truth a Type-1
   /// finding claims is shared.
   private func rawRun(
-    in corpus: TokenCorpus, file: String, line: Int, column: Int, count: Int
+    in corpus: TokenCorpus,
+    file: String,
+    line: Int,
+    column: Int,
+    count: Int
   ) -> [UInt32]? {
     guard let sequence = corpus.sequences.first(where: { $0.file == file }) else { return nil }
     guard
@@ -160,14 +164,20 @@ import Testing
       groups.contains { group in
         Set(group.clones.map { ($0.file as NSString).lastPathComponent })
           .isSuperset(of: ["CodecA.swift", "CodecB.swift"])
-      }, "the genuine copy-paste pair must be reported as an exact clone")
+      },
+      "the genuine copy-paste pair must be reported as an exact clone"
+    )
 
     for group in groups {
       #expect(group.similarity == 1.0)
       let runs = group.clones.map {
         rawRun(
-          in: built, file: $0.file, line: $0.startLine, column: $0.startColumn,
-          count: $0.tokenCount)
+          in: built,
+          file: $0.file,
+          line: $0.startLine,
+          column: $0.startColumn,
+          count: $0.tokenCount
+        )
       }
       // Anchor run must resolve, and every region must be the SAME raw run.
       guard let reference = runs.first ?? nil else {
@@ -177,7 +187,8 @@ import Testing
       for run in runs {
         #expect(
           run == reference,
-          "exact-clone group mixes non-identical raw runs — misattribution regression")
+          "exact-clone group mixes non-identical raw runs — misattribution regression"
+        )
       }
     }
   }
@@ -210,7 +221,9 @@ import Testing
         let mentionsB =
           finding.path.hasSuffix("CodecB.swift") || finding.note?.contains("CodecB.swift") == true
         return mentionsA && mentionsB
-      }, "the copy-pasted codec must be reported")
+      },
+      "the copy-pasted codec must be reported"
+    )
 
     // No decoy pairing: the crypto loop and the socket sendFile never group.
     for finding in exact {
@@ -220,7 +233,8 @@ import Testing
         finding.path.hasSuffix("Socket.swift") || finding.note?.contains("Socket.swift") == true
       #expect(
         !(mentionsHKDF && mentionsSocket),
-        "crypto expand loop and socket sendFile share no tokens: \(finding.message)")
+        "crypto expand loop and socket sendFile share no tokens: \(finding.message)"
+      )
     }
   }
 }

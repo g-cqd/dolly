@@ -39,7 +39,10 @@ import Testing
     let second = dir.appending(path: "b.swift")
     try (clone + "\n").write(to: first, atomically: true, encoding: .utf8)
     try (clone + "\n// @dl:accept exact-clone -- test\n").write(
-      to: second, atomically: true, encoding: .utf8)
+      to: second,
+      atomically: true,
+      encoding: .utf8
+    )
     return (dir, cache, [first.path, second.path])
   }
 
@@ -72,7 +75,10 @@ import Testing
     _ = await analyzer.analyze(files: files)
 
     try "func changed() -> Int { 1 }\n".write(
-      to: URL(fileURLWithPath: files[0]), atomically: true, encoding: .utf8)
+      to: URL(fileURLWithPath: files[0]),
+      atomically: true,
+      encoding: .utf8
+    )
     let rerun = await analyzer.analyze(files: files)
     #expect(rerun.cacheHits == 1)
     #expect(rerun.cacheMisses == 1)
@@ -86,7 +92,8 @@ import Testing
       Configuration(rules: [RuleID.structuralClone.rawValue: .init(enabled: false)]),
       Configuration(duplication: .init(minimumTokens: 40)),
       Configuration(exclude: ["never-matches-a-source"]),
-    ])
+    ]
+  )
   func configurationReusesFacts(configuration: Configuration) async throws {
     let (dir, cache, files) = try makeWorkspace()
     defer { try? FileManager.default.removeItem(at: dir) }

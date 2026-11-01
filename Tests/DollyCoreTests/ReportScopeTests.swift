@@ -14,7 +14,8 @@ import Testing
 
   private func files(in unit: String) throws -> [String] {
     try FileManager.default.contentsOfDirectory(
-      at: Self.corpusRoot.appending(path: unit), includingPropertiesForKeys: nil
+      at: Self.corpusRoot.appending(path: unit),
+      includingPropertiesForKeys: nil
     )
     .filter { $0.pathExtension == "swift" }
     .map(\.path)
@@ -106,7 +107,8 @@ import Testing
     let root = URL(fileURLWithPath: corpus[0]).deletingLastPathComponent().path
     #expect(
       scoped.relativized(to: root).findings.map(\.fingerprint)
-        == unscoped.relativized(to: root).findings.map(\.fingerprint))
+        == unscoped.relativized(to: root).findings.map(\.fingerprint)
+    )
   }
 
   @Test("A baseline from an unscoped run filters the re-anchored finding")
@@ -178,8 +180,12 @@ import Testing
   @Test("A finding conforms to the shared scope through its related members")
   func findingConformsThroughRelatedMembers() {
     let finding = Finding(
-      rule: .exactClone, severity: .warning, path: "/nowhere/Anchor.swift",
-      line: 1, column: 1, message: "duplicate",
+      rule: .exactClone,
+      severity: .warning,
+      path: "/nowhere/Anchor.swift",
+      line: 1,
+      column: 1,
+      message: "duplicate",
       related: [RelatedLocation(path: "/nowhere/Member.swift", line: 1, column: 1)]
     )
     #expect(ReportScope(files: ["/nowhere/Member.swift"]).contains(finding))

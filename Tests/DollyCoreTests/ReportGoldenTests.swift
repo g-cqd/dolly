@@ -25,12 +25,14 @@ import Testing
   /// The tool built beside this package's tests, newest of the debug and release products.
   private static func executable() throws -> URL {
     let build = testsDirectory.deletingLastPathComponent().deletingLastPathComponent().appending(
-      path: ".build")
+      path: ".build"
+    )
     let candidates = ["debug", "release"].map { build.appending(path: "\($0)/\(tool)") }
       .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
     func modified(_ url: URL) -> Date {
       (try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path))?[
-        .modificationDate]
+        .modificationDate
+      ]
         as? Date ?? .distantPast
     }
     return try #require(candidates.max { modified($0) < modified($1) }, "build \(tool) first")
@@ -48,7 +50,9 @@ import Testing
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
       let target = corpus.appending(path: part)
       try FileManager.default.createDirectory(
-        at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: target.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       try FileManager.default.copyItem(at: source, to: target)
     }
     let entries = FileManager.default.enumerator(at: corpus, includingPropertiesForKeys: nil)
@@ -63,7 +67,8 @@ import Testing
 
   private static func run(_ arguments: [String]) throws -> Run {
     let scratch = FileManager.default.temporaryDirectory.appending(
-      path: "\(tool)-golden-\(UUID().uuidString)")
+      path: "\(tool)-golden-\(UUID().uuidString)"
+    )
     try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: scratch) }
     let outputURL = scratch.appending(path: "stdout")
@@ -84,8 +89,10 @@ import Testing
     try output.close()
     try errors.close()
     return Run(
-      status: process.terminationStatus, output: try Data(contentsOf: outputURL),
-      errors: String(decoding: try Data(contentsOf: errorURL), as: UTF8.self))
+      status: process.terminationStatus,
+      output: try Data(contentsOf: outputURL),
+      errors: String(decoding: try Data(contentsOf: errorURL), as: UTF8.self)
+    )
   }
 
   private static func recordedStatus(_ format: String) throws -> Int32 {
@@ -103,7 +110,8 @@ import Testing
     let text = String(decoding: output, as: UTF8.self)
     let replaced = text.replacing(
       /("SRCROOT" : \{\s*"uri" : ")[^"]*(")/,
-      with: { "\($0.output.1)file:\\/\\/\\/SRCROOT\\/\($0.output.2)" })
+      with: { "\($0.output.1)file:\\/\\/\\/SRCROOT\\/\($0.output.2)" }
+    )
     return Data(replaced.utf8)
   }
 
@@ -120,7 +128,8 @@ import Testing
 
   @Test func `the baseline file is byte for byte the recorded one`() throws {
     let path = FileManager.default.temporaryDirectory.appending(
-      path: "\(Self.tool)-baseline-\(UUID().uuidString).json")
+      path: "\(Self.tool)-baseline-\(UUID().uuidString).json"
+    )
     defer { try? FileManager.default.removeItem(at: path) }
     let run = try Self.run(["--write-baseline", path.path])
     #expect(run.status == (try Self.recordedStatus("write-baseline")))
@@ -151,14 +160,16 @@ import Testing
     let degraded = try #require(report["degradedFiles"] as? [[String: Any]])
     #expect(
       Set(skipped.filter { $0["reason"] == "degraded" }.compactMap { $0["path"] })
-        == Set(degraded.compactMap { $0["path"] as? String }))
+        == Set(degraded.compactMap { $0["path"] as? String })
+    )
     #expect(report["timings"] == nil)
   }
 
   @Test func `the xcode summary says how many files were not checked`() throws {
     let report = try Self.object(Data(contentsOf: Self.goldens.appending(path: "report.json")))
     let degraded = Set(
-      ((report["degradedFiles"] as? [[String: Any]]) ?? []).compactMap { $0["path"] as? String })
+      ((report["degradedFiles"] as? [[String: Any]]) ?? []).compactMap { $0["path"] as? String }
+    )
     let run = try Self.run(["--format", "xcode"])
     if degraded.isEmpty {
       #expect(!run.errors.contains("not checked"))

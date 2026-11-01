@@ -38,7 +38,8 @@ struct TokenNormalizerTests {
     let normalizer = TokenNormalizer(normalizeLiterals: true)
     #expect(
       normalizer.normalizedText(kind: .literal, text: "42")
-        == TokenNormalizer.numberPlaceholder)
+        == TokenNormalizer.numberPlaceholder
+    )
 
     // And through the interned pipeline:
     let normalizedTexts = normalizedTexts(from: "let x = 42")
@@ -63,7 +64,8 @@ struct TokenNormalizerTests {
   func shorthandParameters() {
     let normalizedTexts = normalizedTexts(from: "let f = { $0 + $1 }")
     #expect(
-      normalizedTexts.filter { $0 == TokenNormalizer.shorthandParamPlaceholder }.count == 2)
+      normalizedTexts.filter { $0 == TokenNormalizer.shorthandParamPlaceholder }.count == 2
+    )
   }
 
   @Test("Renamed sources normalize to identical token streams")
@@ -76,8 +78,10 @@ struct TokenNormalizerTests {
       fileTokens(from: "func beta(b: Int) -> Int { b + 99 }"),
     ])
     #expect(
-      corpus.sequences[0].records.map(\.normID) == corpus.sequences[1].records.map(\.normID))
+      corpus.sequences[0].records.map(\.normID) == corpus.sequences[1].records.map(\.normID)
+    )
     #expect(
-      corpus.sequences[0].records.map(\.rawID) != corpus.sequences[1].records.map(\.rawID))
+      corpus.sequences[0].records.map(\.rawID) != corpus.sequences[1].records.map(\.rawID)
+    )
   }
 }

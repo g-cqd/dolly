@@ -29,7 +29,8 @@ import Testing
       .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
     func modified(_ url: URL) -> Date {
       (try? FileManager.default.attributesOfItem(atPath: url.resolvingSymlinksInPath().path))?[
-        .modificationDate]
+        .modificationDate
+      ]
         as? Date ?? .distantPast
     }
     return try #require(candidates.max { modified($0) < modified($1) }, "build \(tool) first")
@@ -38,7 +39,8 @@ import Testing
   /// A fresh repository root with `clean/` (reachable code no tool reports), `finding/`, `invalid/` (not UTF-8), `locked/` (mode 000) and `empty/`.
   private static func workspace() throws -> URL {
     let root = FileManager.default.temporaryDirectory.appending(
-      path: "\(tool)-exit-\(UUID().uuidString)")
+      path: "\(tool)-exit-\(UUID().uuidString)"
+    )
     let manager = FileManager.default
     for (directory, bytes) in [
       ("clean", Data("@main struct Clean {\n    static func main() {}\n}\n".utf8)),
@@ -47,13 +49,19 @@ import Testing
       ("locked", Data("struct Locked {}\n".utf8)),
     ] {
       try manager.createDirectory(
-        at: root.appending(path: directory), withIntermediateDirectories: true)
+        at: root.appending(path: directory),
+        withIntermediateDirectories: true
+      )
       try bytes.write(to: root.appending(path: "\(directory)/A.swift"))
     }
     try manager.createDirectory(
-      at: root.appending(path: "empty"), withIntermediateDirectories: true)
+      at: root.appending(path: "empty"),
+      withIntermediateDirectories: true
+    )
     try manager.setAttributes(
-      [.posixPermissions: 0], ofItemAtPath: root.appending(path: "locked/A.swift").path)
+      [.posixPermissions: 0],
+      ofItemAtPath: root.appending(path: "locked/A.swift").path
+    )
     try Data("gitdir: none\n".utf8).write(to: root.appending(path: ".git"))
     try Data("{ not json".utf8).write(to: root.appending(path: "malformed.json"))
     if let rule {
@@ -83,13 +91,17 @@ import Testing
     let root = try workspace()
     defer {
       try? FileManager.default.setAttributes(
-        [.posixPermissions: 0o644], ofItemAtPath: root.appending(path: "locked/A.swift").path)
+        [.posixPermissions: 0o644],
+        ofItemAtPath: root.appending(path: "locked/A.swift").path
+      )
       try? FileManager.default.removeItem(at: root)
     }
     for row in table {
       let status = try status(row.arguments, in: root)
       #expect(
-        status == row.status, "\(tool) \(row.arguments.joined(separator: " ")) exits \(status)")
+        status == row.status,
+        "\(tool) \(row.arguments.joined(separator: " ")) exits \(status)"
+      )
     }
   }
 

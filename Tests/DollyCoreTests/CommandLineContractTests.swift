@@ -52,7 +52,8 @@ import Testing
     #expect(run.status == 0)
     let invocation = try #require(
       try JSONDecoder().decode(SarifLog.self, from: run.standardOutput).runs.first?.invocations?
-        .first)
+        .first
+    )
     #expect(invocation.executionSuccessful)
     #expect(invocation.toolExecutionNotifications == nil)
   }
@@ -124,7 +125,8 @@ import Testing
 
     #expect(log.originalUriBaseIds.isEmpty)
     let expected = Set(
-      ["A.swift", "B.swift"].map { Workspace.canonical(root) + "/My Sources/" + $0 })
+      ["A.swift", "B.swift"].map { Workspace.canonical(root) + "/My Sources/" + $0 }
+    )
     #expect(Set(log.artifactLocations.compactMap { URL(string: $0.uri)?.path }) == expected)
     for location in log.artifactLocations {
       #expect(location.uri.hasPrefix("file:///"))
@@ -158,7 +160,8 @@ import Testing
     for analyzed in spellings {
       for base in spellings {
         #expect(
-          try locations(analyzing: analyzed, relativeTo: base) == expected, "\(analyzed) vs \(base)"
+          try locations(analyzing: analyzed, relativeTo: base) == expected,
+          "\(analyzed) vs \(base)"
         )
       }
     }
@@ -170,14 +173,17 @@ import Testing
     defer { try? FileManager.default.removeItem(at: root) }
     // A dangling link is listed like any `.swift` entry, then fails the read.
     try FileManager.default.createSymbolicLink(
-      atPath: root.path + "/Sources/Broken.swift", withDestinationPath: "Missing.swift")
+      atPath: root.path + "/Sources/Broken.swift",
+      withDestinationPath: "Missing.swift"
+    )
     let log = try BuiltTool.sarif(analyzing: root.path, relativeTo: root.path, in: root)
 
     let degraded = log.results.filter { $0.ruleId == "dolly/degraded-file" }
     #expect(degraded.count == 1)
     for result in degraded {
       #expect(
-        result.locations.map(\.physicalLocation.artifactLocation.uri) == ["Sources/Broken.swift"])
+        result.locations.map(\.physicalLocation.artifactLocation.uri) == ["Sources/Broken.swift"]
+      )
       #expect(result.locations.map(\.physicalLocation.artifactLocation.uriBaseId) == ["SRCROOT"])
       #expect(!result.message.text.contains(Workspace.canonical(root)), "\(result.message.text)")
       #expect(!result.message.text.contains(root.path), "\(result.message.text)")
@@ -211,7 +217,9 @@ import Testing
     let root = try Workspace.make(["A.swift": "let value = 1\n"])
     defer { try? FileManager.default.removeItem(at: root) }
     let run = try BuiltTool.run(
-      ["analyze", root.path, "--no-cache", "--only", "Missing.swift"], in: root)
+      ["analyze", root.path, "--no-cache", "--only", "Missing.swift"],
+      in: root
+    )
 
     let errors = String(decoding: run.standardError, as: UTF8.self)
     #expect(run.status == 0)
@@ -247,11 +255,14 @@ enum BuiltTool {
   /// The SARIF log `dolly analyze` prints for `analyzed`, relativized to `base`
   /// when one is given, run from `directory` with the facts cache off.
   static func sarif(
-    analyzing analyzed: String, relativeTo base: String?, in directory: URL
+    analyzing analyzed: String,
+    relativeTo base: String?,
+    in directory: URL
   ) throws -> SarifLog {
     try JSONDecoder().decode(
       SarifLog.self,
-      from: analyze(analyzed, relativeTo: base, in: directory).standardOutput)
+      from: analyze(analyzed, relativeTo: base, in: directory).standardOutput
+    )
   }
 
   /// `dolly analyze` with SARIF output and the facts cache off.
@@ -269,7 +280,8 @@ enum BuiltTool {
   static func run(_ arguments: [String], in directory: URL) throws -> Run {
     let executable = try #require(
       executable,
-      "no dolly executable near \(Bundle.module.bundleURL.path); build the package first")
+      "no dolly executable near \(Bundle.module.bundleURL.path); build the package first"
+    )
     let scratch = FileManager.default.temporaryDirectory
       .appending(path: "dolly-run-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
@@ -294,7 +306,8 @@ enum BuiltTool {
     return Run(
       status: process.terminationStatus,
       standardOutput: try Data(contentsOf: outputURL),
-      standardError: try Data(contentsOf: errorURL))
+      standardError: try Data(contentsOf: errorURL)
+    )
   }
 }
 
@@ -309,7 +322,9 @@ enum Workspace {
       // and spaces, which must stay part of the file name.
       let url = URL(fileURLWithPath: root.path + "/" + path)
       try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       try contents.write(to: url, atomically: true, encoding: .utf8)
     }
     return root
@@ -332,7 +347,8 @@ enum Workspace {
   /// `[` and `]`) and well-formed percent escapes.
   static func isURIReference(_ uri: String) -> Bool {
     let allowed = Set(
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*+,;=:@/".utf8)
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*+,;=:@/".utf8
+    )
     let hex = Set("0123456789ABCDEFabcdef".utf8)
     let bytes = Array(uri.utf8)
     var index = 0

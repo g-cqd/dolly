@@ -76,7 +76,9 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
       boundaries.map { boundary in
         defer { last = boundary }
         return Int64(boundary - last)
-      }, .zigzag)
+      },
+      .zigzag
+    )
     writer.field(8, hasSourceLocationDirective)
     try writer.field(9, directives)
     writer.field(10, Int(contentRegion))
@@ -125,7 +127,8 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
               }
             }
             return FileContext.LineSpan(start: start, end: end)
-          })
+          }
+        )
       default: try reader.skipField(tag)
       }
     }
@@ -145,13 +148,18 @@ extension CachedFileFacts: AemiProtoFastEncodable, AemiProtoFastDecodable {
     }
     var boundary = 0
     return Self(
-      recordData: Data(records), strings: strings, kindData: Data(kinds),
+      recordData: Data(records),
+      strings: strings,
+      kindData: Data(kinds),
       boundaries: boundaries.map { delta in
         boundary += Int(delta)
         return boundary
       },
-      hasSourceLocationDirective: hasDirective, directives: directives,
-      contentRegion: UInt8(truncatingIfNeeded: contentRegion), previewSpans: spans)
+      hasSourceLocationDirective: hasDirective,
+      directives: directives,
+      contentRegion: UInt8(truncatingIfNeeded: contentRegion),
+      previewSpans: spans
+    )
   }
 
 }

@@ -17,7 +17,8 @@ import Testing
   /// The default 50-token floor sits above a compact fixture, so the pair below
   /// only registers as a clone under a lowered threshold.
   private static let sensitive = Configuration(
-    duplication: Configuration.DuplicationSettings(minimumTokens: 20))
+    duplication: Configuration.DuplicationSettings(minimumTokens: 20)
+  )
 
   private static let clonePair = """
     func alphaOne(_ a: Int, _ b: Int) -> Int {

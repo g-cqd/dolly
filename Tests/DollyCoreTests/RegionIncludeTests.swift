@@ -39,7 +39,9 @@ import Testing
     for (relativePath, contents) in files {
       let url = scratch.url.appending(path: relativePath)
       try FileManager.default.createDirectory(
-        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
       try Data(contents.utf8).write(to: url)
       paths.append(url.path)
     }
@@ -139,7 +141,9 @@ import Testing
     ]
     let defaultReport = try await analyze(files)
     let included = try await analyze(
-      files, configuration: Configuration(includeRegions: "debug,mock,script"))
+      files,
+      configuration: Configuration(includeRegions: "debug,mock,script")
+    )
 
     // Two different temporary roots, so findings compare by shape (rule,
     // severity, whether a region tag was added) rather than by their
