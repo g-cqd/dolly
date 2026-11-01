@@ -29,19 +29,4 @@ enum BoundedFileReader {
       throw .configurationUnreadable(path: path, underlying: underlying)
     }
   }
-
-  /// Bounded read plus JSON decode with the same fail-closed behavior:
-  /// malformed content is a typed error, never a silently-empty value.
-  static func readJSON<Value: Decodable>(
-    _ type: Value.Type,
-    path: String,
-    cap: Int = configByteCap
-  ) throws(DollyError) -> Value {
-    let data = try read(path: path, cap: cap)
-    do {
-      return try JSONDecoder().decode(type, from: data)
-    } catch {
-      throw .configurationInvalid(path: path, detail: String(describing: error))
-    }
-  }
 }
