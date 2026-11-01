@@ -34,7 +34,7 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "53d82440574f5fc121fa25dfe411f699cccb2431"
+      revision: "a8c9d638039c13b11adaa0803669746fda64dd51"
     ),
     // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
     // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
@@ -59,7 +59,7 @@ let package = Package(
         .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "Suppression", package: "analyzerkit"),
         .product(name: "ReportSupport", package: "analyzerkit"),
-        .product(name: "WordPiece", package: "analyzerkit"),
+        .product(name: "SemanticEmbedding", package: "analyzerkit"),
         .product(name: "AemiProtobuf", package: "AemiProtobuf"),
         .product(name: "AemiProtobufCore", package: "AemiProtobuf"),
       ],
@@ -85,6 +85,7 @@ let package = Package(
       dependencies: [
         "DollyCore", .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
+        .product(name: "SemanticEmbedding", package: "analyzerkit"),
         .product(name: "Suppression", package: "analyzerkit"),
         .product(name: "ReportSupport", package: "analyzerkit"),
         .product(name: "CorpusScan", package: "analyzerkit"),

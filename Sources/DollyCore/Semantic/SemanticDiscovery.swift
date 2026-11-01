@@ -11,6 +11,8 @@
 //  CoreML / NaturalLanguage) every branch returns `.unavailable`, so
 //  `--semantic` degrades to structural-only with a note and never fails.
 
+import SemanticEmbedding
+
 #if canImport(FoundationEssentials)
   import FoundationEssentials
 #else
@@ -107,7 +109,7 @@ enum SemanticDiscovery {
     // here falls through to the NLContextual default rather than failing the
     // pass — the bundled model is an upgrade, never a hard requirement.
     #if canImport(CoreML)
-      if let bundledDir = bundledModelDirectory() {
+      if let bundledDir = EmbeddingBundleLocator.directory(tool: "dolly") {
         if let provider = try? await HFSemanticEmbeddingProvider(
           bundleDir: bundledDir,
           maxLength: options.maxLength
@@ -140,65 +142,6 @@ enum SemanticDiscovery {
       )
     #endif
   }
-
-  #if canImport(CoreML)
-    /// Locates a Core ML embedding bundle shipped alongside the executable.
-    ///
-    /// The `dolly-full` release archive lays the model out at
-    /// `<executable-dir>/Models/MiniLM`, so a bundled build gets a
-    /// code-appropriate model with no `--embedding-bundle` flag.
-    /// `DOLLY_EMBEDDING_BUNDLE` overrides the location for installs that
-    /// separate the binary from its resources (e.g. `bin/` + `share/`).
-    /// Returns `nil` — the common case for the plain `dolly` binary and for
-    /// dev/test builds, whose executable directory holds no model — which
-    /// leaves the on-device NLContextual default in charge.
-    static func bundledModelDirectory() -> URL? {
-      // CommandLine rather than Bundle.main.executableURL: Bundle lives in
-      // corelibs Foundation, which would re-link ~51 MiB of ICU on Linux. argv[0]
-      // is what Bundle.main resolves from for a CLI anyway.
-      let execURL = URL(fileURLWithPath: CommandLine.arguments.first ?? "dolly")
-        .resolvingSymlinksInPath()
-      return bundledModelDirectory(
-        executableDir: execURL.deletingLastPathComponent(),
-        override: ProcessInfo.processInfo.environment["DOLLY_EMBEDDING_BUNDLE"]
-      )
-    }
-
-    /// Pure candidate search for `bundledModelDirectory()` — no process globals,
-    /// so it is unit-testable. Search order: `override` (the
-    /// `DOLLY_EMBEDDING_BUNDLE` value) → `<executableDir>/Models/MiniLM` →
-    /// `<executableDir>/../share/dolly/Models/MiniLM`. The first candidate that
-    /// contains a `.mlpackage`/`.mlmodelc` wins; `nil` when none do.
-    static func bundledModelDirectory(executableDir: URL, override: String?) -> URL? {
-      let fm = FileManager.default
-      func hasModel(_ dir: URL) -> Bool {
-        guard
-          let contents = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        else { return false }
-        return contents.contains {
-          $0.pathExtension == "mlpackage" || $0.pathExtension == "mlmodelc"
-        }
-      }
-
-      var candidates: [URL] = []
-      if let override, !override.isEmpty {
-        candidates.append(URL(fileURLWithPath: override))
-      }
-      candidates.append(executableDir.appendingPathComponent("Models/MiniLM"))
-      // FHS / Homebrew-style `bin/dolly` next to `share/dolly/Models/MiniLM`.
-      candidates.append(
-        executableDir.deletingLastPathComponent().appendingPathComponent(
-          "share/dolly/Models/MiniLM"
-        )
-      )
-
-      // Resolve each candidate so a symlinked model directory is handed to the
-      // provider as its real path — `contentsOfDirectory` (here and in the
-      // provider's own model lookup) does not traverse a URL that is itself a
-      // symlink to a directory.
-      return candidates.map { $0.resolvingSymlinksInPath() }.first(where: hasModel)
-    }
-  #endif
 
   /// Embedding-clone discovery over `snippets`. Adapted from SSA's
   /// `runUmbrellaEmbeddingDiscovery`: kNN over embeddings + token-Jaccard

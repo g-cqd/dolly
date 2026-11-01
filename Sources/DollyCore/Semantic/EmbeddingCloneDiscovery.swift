@@ -11,6 +11,8 @@
 //    5. Drop singletons; emit one `CloneGroup` (type `.semantic`) per
 //       component with `similarity` = average pairwise cosine.
 
+import SemanticEmbedding
+
 #if canImport(FoundationEssentials)
   import FoundationEssentials
 #else
