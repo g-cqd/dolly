@@ -1,5 +1,6 @@
 import DollyCore
 import Foundation
+import ReportSupport
 import Testing
 
 /// SARIF regions count columns in UTF-16 code units, while dolly's own columns

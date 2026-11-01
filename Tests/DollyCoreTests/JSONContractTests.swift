@@ -1,6 +1,7 @@
 import DollyCore
 import Foundation
 import ProjectModel
+import ReportSupport
 import Testing
 
 /// The `--format json` report is a versioned contract: `schemaVersion` lets a
