@@ -8,6 +8,7 @@
 //  the required Linux CI lane).
 
 import Foundation
+import SemanticEmbedding
 import Testing
 
 @testable import DollyCore

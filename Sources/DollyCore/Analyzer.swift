@@ -1,5 +1,6 @@
 public import CorpusScan
 public import ProjectModel
+import SemanticEmbedding
 import SourceCorpus
 import SwiftParser
 import SwiftSyntax
