@@ -57,42 +57,15 @@ extension SemanticEmbeddingProvider {
 // MARK: - SemanticEmbeddingError
 
 enum SemanticEmbeddingError: Error, Sendable, CustomStringConvertible {
-  case notConfigured
-  case snippetTooLong(actual: Int, limit: Int)
   case modelLoadFailed(underlying: any Error)
   case inferenceFailed(reason: String)
-  case unsupportedOutputDtype(actual: String)
 
   var description: String {
     switch self {
-    case .notConfigured:
-      "Semantic embedding provider not configured."
-    case .snippetTooLong(let actual, let limit):
-      "Code snippet of \(actual) tokens exceeds the embedding context window (\(limit))."
     case .modelLoadFailed(let underlying):
       "Failed to load embedding model: \(underlying)"
     case .inferenceFailed(let reason):
       "Embedding inference failed: \(reason)"
-    case .unsupportedOutputDtype(let actual):
-      "Embedding model output dtype \(actual) is not supported; expected float32. "
-        + "Re-export with FLOAT32 compute precision."
     }
-  }
-}
-
-// MARK: - UnconfiguredSemanticEmbeddingProvider
-
-/// Default provider for builds that ship no model. Every call throws
-/// `.notConfigured` so an unconfigured semantic pass surfaces an actionable
-/// error instead of silently degrading.
-struct UnconfiguredSemanticEmbeddingProvider: SemanticEmbeddingProvider, Sendable {
-  var embeddingDimension: Int { 0 }
-
-  func embed(snippet: String) async throws -> [Float] {
-    throw SemanticEmbeddingError.notConfigured
-  }
-
-  func embed(snippets: [String]) async throws -> [[Float]] {
-    throw SemanticEmbeddingError.notConfigured
   }
 }

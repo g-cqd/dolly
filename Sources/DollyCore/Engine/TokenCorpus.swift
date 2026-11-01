@@ -60,8 +60,6 @@ struct SourceText: Sendable {
     lineStartOffsets = offsets
   }
 
-  var lineCount: Int { lineStartOffsets.count }
-
   /// The text of the 1-based line, excluding its terminator.
   func line(_ number: Int) -> Substring {
     guard number >= 1, number <= lineStartOffsets.count else { return "" }

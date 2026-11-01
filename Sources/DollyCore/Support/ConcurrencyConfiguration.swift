@@ -18,9 +18,6 @@ struct ConcurrencyConfiguration: Sendable {
   /// Default configuration based on system capabilities.
   static let `default` = Self()
 
-  /// Single-threaded configuration (for debugging or testing).
-  static let serial = Self(maxConcurrentFiles: 1, maxConcurrentTasks: 1)
-
   /// Maximum number of files to process concurrently. Setting this to 1
   /// forces serial execution end-to-end.
   let maxConcurrentFiles: Int

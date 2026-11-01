@@ -25,16 +25,4 @@ enum DirectionOptimizingBFS {
     guard remainingEdges > 0 else { return false }
     return frontierEdges * alpha > remainingEdges
   }
-
-  /// Switch back from bottom-up to top-down when the frontier
-  /// becomes small relative to the node count.
-  ///
-  /// - Returns: `true` when `frontierSize * beta < nodeCount`.
-  static func shouldSwitchToTopDown(
-    frontierSize: Int,
-    nodeCount: Int,
-    beta: Int
-  ) -> Bool {
-    frontierSize * beta < nodeCount
-  }
 }
