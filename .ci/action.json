@@ -1,0 +1,38 @@
+{
+  "swift": {
+    "parallel": false
+  },
+  "quality": {
+    "paths": [
+      "Sources"
+    ],
+    "include": [
+      "Package.swift",
+      "Sources/**",
+      "Tests/DollyCoreTests/*.swift"
+    ]
+  },
+  "release": {
+    "executables": [
+      "dolly"
+    ]
+  },
+  "commands": [
+    {
+      "id": "no-gcd",
+      "run": "Scripts/no-gcd.sh",
+      "after": "quality"
+    },
+    {
+      "id": "self-analysis",
+      "run": "swift run dolly analyze Sources --strict --no-cache",
+      "after": "linux-debug"
+    },
+    {
+      "id": "full-bundle",
+      "run": ".ci/full-bundle.sh",
+      "after": "archive-macos",
+      "archives": true
+    }
+  ]
+}
