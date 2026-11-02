@@ -34,17 +34,17 @@ let package = Package(
     // files. Pinned by revision, as the other analyzers pin it.
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "220803df78ec5ef9c8cc91b1cb0fe9d04c3bc936"
+      revision: "a1deea7c998f652478319abca5303ecd4595ac6c"
     ),
     // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
     // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
     .package(
       url: "https://github.com/g-cqd/AemiProtobuf.git",
-      revision: "464d4a55d55ec186f3b92a6814b54084825eddc7"
+      revision: "48a3075fe70b88e3cb4d3973349823b4a9f20afd"
     ),
     .package(
       url: "https://github.com/g-cqd/AemiJSON.git",
-      revision: "e42298a5fd81cbb3f279d1de1f4a2db7556f4f2d"
+      revision: "f2da303a950829a46d223ef75f631115501eeea3"
     ),
   ],
   targets: [
