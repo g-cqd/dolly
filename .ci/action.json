@@ -21,18 +21,21 @@
     {
       "id": "no-gcd",
       "run": "Scripts/no-gcd.sh",
-      "after": "quality"
+      "after": "quality",
+      "title": "Quality \u00b7 GCD Ban"
     },
     {
       "id": "self-analysis",
       "run": "swift run dolly analyze Sources --strict --no-cache",
-      "after": "linux-debug"
+      "after": "linux-debug",
+      "title": "Quality \u00b7 Self Analysis"
     },
     {
       "id": "full-bundle",
       "run": ".ci/full-bundle.sh",
       "after": "archive-macos",
-      "archives": true
+      "archives": true,
+      "title": "Packaging \u00b7 Model Bundle"
     }
   ]
 }
