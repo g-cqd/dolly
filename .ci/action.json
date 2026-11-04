@@ -37,5 +37,10 @@
       "archives": true,
       "title": "Packaging \u00b7 Model Bundle"
     }
+  ],
+  "localChecks": [
+    "quality",
+    "debug",
+    "self-analysis"
   ]
 }
