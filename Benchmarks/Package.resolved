@@ -18,6 +18,14 @@
       }
     },
     {
+      "identity" : "aemiprotobuf",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/g-cqd/AemiProtobuf.git",
+      "state" : {
+        "revision" : "2c0a66b9a65781f22d88a70c51e769ed667cd2e0"
+      }
+    },
+    {
       "identity" : "aemiregex",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/g-cqd/AemiRegex.git",
@@ -39,7 +47,7 @@
       "location" : "https://github.com/g-cqd/dolly.git",
       "state" : {
         "branch" : "main",
-        "revision" : "4ba361ce4f260c526226b2324514b497cd87f8e9"
+        "revision" : "038e25861e2ff907d603e37e2bca6c45654a1c9b"
       }
     },
     {
@@ -49,6 +57,14 @@
       "state" : {
         "revision" : "c2e1210df04b4fff47e53f2f9dad9cc45ae15d63",
         "version" : "0.2.0"
+      }
+    },
+    {
+      "identity" : "indexstore-db",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/indexstore-db.git",
+      "state" : {
+        "revision" : "0390867818c28241af4650eb4ef29af5669335a3"
       }
     },
     {
@@ -79,6 +95,15 @@
       }
     },
     {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "917b472dbe53ba699cbb0495f9a95a084bc6364d",
+        "version" : "1.7.4"
+      }
+    },
+    {
       "identity" : "swift-atomics",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-atomics.git",
@@ -97,12 +122,39 @@
       }
     },
     {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "f8fad2f95ad67b45f6340c0960e2396094d67e07",
+        "version" : "5.1.1"
+      }
+    },
+    {
+      "identity" : "swift-lmdb",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-lmdb.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "7f4ee94510991a1dd30afe62a632bdd169e1ea70"
+      }
+    },
+    {
       "identity" : "swift-numerics",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-numerics",
       "state" : {
         "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-subprocess",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "state" : {
+        "revision" : "dbe21bd7dfd4ffef8c32588918542a8abfa1b54c",
+        "version" : "1.0.2"
       }
     },
     {
