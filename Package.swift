@@ -32,6 +32,8 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
     // The project model the analyzers share: previews, test code, generated
     // files. Pinned by revision, as the other analyzers pin it.
+    // Aemi's kernels (SplitMix64, disjoint sets); the revision analyzerkit pins, written as it writes it.
+    .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "409c647a91736065ac53c1877abe2cf4840f7617"),
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
       revision: "a7814db1cdf56fbc97460f37e469a194e31cfc12"
@@ -53,6 +55,7 @@ let package = Package(
       dependencies: [
         .product(name: "SwiftSyntax", package: "swift-syntax"),
         .product(name: "SwiftParser", package: "swift-syntax"),
+        .product(name: "AemiKernel", package: "aemi"),
         .product(name: "ProjectModel", package: "analyzerkit"),
         .product(name: "CorpusScan", package: "analyzerkit"),
         .product(name: "AnalyzerConfiguration", package: "analyzerkit"),
@@ -83,7 +86,7 @@ let package = Package(
     .testTarget(
       name: "DollyCoreTests",
       dependencies: [
-        "DollyCore", .product(name: "SourceCorpus", package: "analyzerkit"),
+        "DollyCore", .product(name: "AemiKernel", package: "aemi"), .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
         .product(name: "SemanticEmbedding", package: "analyzerkit"),
         .product(name: "Suppression", package: "analyzerkit"),

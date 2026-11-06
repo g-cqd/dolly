@@ -11,6 +11,7 @@
 //    5. Drop singletons; emit one `CloneGroup` (type `.semantic`) per
 //       component with `similarity` = average pairwise cosine.
 
+internal import AemiKernel
 import SemanticEmbedding
 
 #if canImport(FoundationEssentials)
@@ -102,7 +103,7 @@ struct EmbeddingCloneDiscovery: Sendable {
 
     guard !pairs.isEmpty else { return [] }
 
-    var uf = UnionFind(count: snippets.count)
+    var uf = DisjointSets(count: snippets.count)
     for (a, b, _) in pairs { uf.union(a, b) }
 
     var pairsByRoot: [Int: [(Int, Int, Float)]] = [:]
@@ -157,39 +158,5 @@ struct EmbeddingCloneDiscovery: Sendable {
   private func shouldSkipPair(_ a: EmbeddingSnippet, _ b: EmbeddingSnippet) -> Bool {
     guard a.file == b.file else { return false }
     return !(a.endLine < b.startLine || b.endLine < a.startLine)
-  }
-}
-
-// MARK: - UnionFind
-
-/// Union-find with path compression for grouping clone pairs.
-struct UnionFind: Sendable {
-  private var parent: [Int]
-  private var rank: [Int]
-
-  init(count: Int) {
-    parent = Array(0..<count)
-    rank = [Int](repeating: 0, count: count)
-  }
-
-  mutating func find(_ x: Int) -> Int {
-    if parent[x] != x {
-      parent[x] = find(parent[x])
-    }
-    return parent[x]
-  }
-
-  mutating func union(_ a: Int, _ b: Int) {
-    let rootA = find(a)
-    let rootB = find(b)
-    guard rootA != rootB else { return }
-    if rank[rootA] < rank[rootB] {
-      parent[rootA] = rootB
-    } else if rank[rootA] > rank[rootB] {
-      parent[rootB] = rootA
-    } else {
-      parent[rootB] = rootA
-      rank[rootA] += 1
-    }
   }
 }

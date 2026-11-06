@@ -1,3 +1,4 @@
+internal import AemiKernel
 //  MinHash.swift
 //  dolly — lifted from SwiftStaticAnalysis (MIT)
 
@@ -13,17 +14,6 @@ func mersenne61Reduce(_ value: UInt64) -> UInt64 {
   let mask: UInt64 = (1 &<< 61) &- 1
   let result = (value & mask) &+ (value &>> 61)
   return result >= mask ? result &- mask : result
-}
-
-/// SplitMix64 — the standard high-quality 64-bit PRNG for seeding other
-/// algorithms.
-func splitMix64(_ state: inout UInt64) -> UInt64 {
-  state &+= 0x9E37_79B9_7F4A_7C15
-  var value = state
-  value = (value ^ (value &>> 30)) &* 0xBF58_476D_1CE4_E5B9
-  value = (value ^ (value &>> 27)) &* 0x94D0_49BB_1331_11EB
-  value = value ^ (value &>> 31)
-  return value
 }
 
 // MARK: - MinHashSignature
@@ -85,17 +75,17 @@ struct MinHashGenerator: Sendable {
     // 61 bits; `a` is forced non-zero so the universal-hash family is
     // injective.
     let mask: UInt64 = (1 &<< 61) &- 1
-    var rng = seed
+    var rng = SplitMix64(seed: seed)
     var a: [UInt64] = []
     var b: [UInt64] = []
     a.reserveCapacity(numHashes)
     b.reserveCapacity(numHashes)
 
     for _ in 0..<numHashes {
-      var coefficientA = splitMix64(&rng) & mask
+      var coefficientA = rng.next() & mask
       if coefficientA == 0 { coefficientA = 1 }
       a.append(coefficientA)
-      b.append(splitMix64(&rng) & mask)
+      b.append(rng.next() & mask)
     }
 
     coefficientsA = a
