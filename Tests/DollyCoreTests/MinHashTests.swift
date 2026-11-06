@@ -2,6 +2,7 @@
 //  dolly — ported from SwiftStaticAnalysis DuplicationDetectorTests (MIT)
 
 import Foundation
+import AemiKernel
 import Testing
 
 @testable import DollyCore
@@ -175,11 +176,11 @@ struct MinHashSIMDEquivalenceTests {
     let generator = MinHashGenerator(numHashes: 256, seed: 12345)
 
     // Build two sets with a known Jaccard similarity of ~0.5.
-    var rng: UInt64 = 7
+    var rng = SplitMix64(seed: 7)
     var setA = Set<UInt64>()
     var setB = Set<UInt64>()
     for _ in 0..<200 {
-      setA.insert(splitMix64(&rng))
+      setA.insert(rng.next())
     }
     var shared = 0
     for hash in setA {
@@ -188,7 +189,7 @@ struct MinHashSIMDEquivalenceTests {
       if shared >= 100 { break }
     }
     for _ in 0..<100 {
-      setB.insert(splitMix64(&rng))
+      setB.insert(rng.next())
     }
 
     let sigA = generator.computeSignature(for: setA, documentId: 0)

@@ -6,6 +6,7 @@
 //  threshold. The property test checks that against brute force on seeded
 //  random corpora whose construction guarantees true pairs exist.
 
+import AemiKernel
 import Testing
 
 @testable import DollyCore
@@ -13,7 +14,7 @@ import Testing
 @Suite("SourcererCC prefix index")
 struct PrefixIndexTests {
   private func makeDocuments(seed: UInt64, count: Int) -> [ShingledDocument] {
-    var rng = seed
+    var rng = SplitMix64(seed: seed)
     var documents: [ShingledDocument] = []
     var previous: Set<UInt64> = []
 
@@ -22,23 +23,23 @@ struct PrefixIndexTests {
       if id % 3 == 0 || previous.isEmpty {
         // Fresh random set from a small universe so overlaps occur.
         features = []
-        let size = 30 + Int(splitMix64(&rng) % 31)
+        let size = 30 + Int(rng.next() % 31)
         while features.count < size {
-          features.insert(1000 + splitMix64(&rng) % 300)
+          features.insert(1000 + rng.next() % 300)
         }
       } else {
         // Mutated copy of the previous set: near-duplicate documents,
         // many above and just below the threshold.
         features = previous
-        let removals = Int(splitMix64(&rng) % 6)
+        let removals = Int(rng.next() % 6)
         for _ in 0..<removals {
-          if let victim = features.min(by: { _, _ in splitMix64(&rng) % 2 == 0 }) {
+          if let victim = features.min(by: { _, _ in rng.next() % 2 == 0 }) {
             features.remove(victim)
           }
         }
-        let additions = Int(splitMix64(&rng) % 6)
+        let additions = Int(rng.next() % 6)
         for _ in 0..<additions {
-          features.insert(1000 + splitMix64(&rng) % 300)
+          features.insert(1000 + rng.next() % 300)
         }
       }
       previous = features
