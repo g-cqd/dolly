@@ -36,7 +36,7 @@ let package = Package(
     .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "0bae2edb1a89bd3d931fb3122c2184cc5c368834"),
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
-      revision: "92e9487329e40e88d76231faaea3272eb533e18e"
+      revision: "37ce3bbe0492fd668206802343cfc0c9eac73291"
     ),
     // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
     // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
