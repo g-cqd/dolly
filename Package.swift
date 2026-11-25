@@ -1,10 +1,6 @@
 // swift-tools-version: 6.4
 import PackageDescription
 
-// Strict-by-default: warnings are errors; upcoming features are on so the code
-// is already valid under the next language mode's semantics, and strict memory
-// safety keeps the unsafe surface at zero. Swift 6 language mode (below)
-// already includes complete strict concurrency.
 let strictSwiftSettings: [SwiftSetting] = [
   .treatAllWarnings(as: .error),
   .enableUpcomingFeature("ExistentialAny"),
@@ -25,21 +21,14 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "604.0.0"),
     .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
-    // swift-system supplies the one thing FoundationEssentials lacks for a CLI:
-    // a safe, Sendable stderr handle. Foundation's FileHandle would re-link
-    // ~50 MiB of ICU on Linux; the C `fputs` route needs three separate unsafe
-    // markers. One small, dependency-free Apple package is the better trade.
     .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
-    // The project model the analyzers share: previews, test code, generated
-    // files. Pinned by revision, as the other analyzers pin it.
-    // Aemi's kernels (SplitMix64, disjoint sets); the revision analyzerkit pins, written as it writes it.
-    .package(url: "https://github.com/Aemi-Studio/aemi.git", revision: "bd5e4cf4441ca3ed1b424935142586ccaac0f835"),
+    .package(
+      url: "https://github.com/Aemi-Studio/aemi.git",
+      revision: "bd5e4cf4441ca3ed1b424935142586ccaac0f835"),
     .package(
       url: "https://github.com/g-cqd/analyzerkit.git",
       revision: "3b5d779d61e51a346fcb86c69ac3ab8ebcbdd6c0"
     ),
-    // The facts cache's payload codec (Cache/FactsProtobufCoding.swift), and the JSON one the size budget compares
-    // against; analyzerkit's revisions, written as analyzerkit writes them (its ADR-0025).
     .package(
       url: "https://github.com/g-cqd/AemiProtobuf.git",
       revision: "b31d62bbf28286aed1b394c0762257d745bbb530"
@@ -86,7 +75,8 @@ let package = Package(
     .testTarget(
       name: "DollyCoreTests",
       dependencies: [
-        "DollyCore", .product(name: "AemiKernel", package: "aemi"), .product(name: "SourceCorpus", package: "analyzerkit"),
+        "DollyCore", .product(name: "AemiKernel", package: "aemi"),
+        .product(name: "SourceCorpus", package: "analyzerkit"),
         .product(name: "WordPiece", package: "analyzerkit"),
         .product(name: "SemanticEmbedding", package: "analyzerkit"),
         .product(name: "Suppression", package: "analyzerkit"),
