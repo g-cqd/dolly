@@ -32,7 +32,7 @@ extension FindingBaseline where Finding == DollyCore.Finding {
 
   public func write(path: String) throws(DollyError) {
     do {
-      try encoded(tool: ToolInfo.name).write(to: URL(fileURLWithPath: path))
+      try encoded(tool: ToolInfo.name).write(to: URL(fileURLWithPath: path), options: .atomic)
     } catch {
       throw .configurationUnreadable(path: path, underlying: String(describing: error))
     }
